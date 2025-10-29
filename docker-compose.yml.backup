@@ -1,0 +1,207 @@
+version: '3.0'
+
+services:
+
+  flask:
+    build:
+      context: ./flask
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./flask:/app
+    depends_on:
+      - mysql
+    links:
+      - mysql
+    networks:
+      - web
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.flask.rule=Host(`go.edu-ai.eu`)"
+      - "traefik.http.routers.flask.entrypoints=websecure"
+      - "traefik.http.routers.flask.tls.certresolver=myresolver"
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+    # workers = cpu_count * 2 + 1
+    #command: python3 run.py
+    command: gunicorn -w 8 -b :8000 app:app --reload
+
+  mysql:
+    image: mysql:latest
+    networks:
+      - internal
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: edu
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+
+  rasa:
+    build:
+      context: ./rasa/
+    ports:
+      - "5005"
+    volumes:
+      - ./rasa:/app
+    env_file:
+      - .env
+    command:
+      - run
+      - --cors
+      - "*"
+      - --enable-api
+    networks:
+      - internal
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.rasa.rule=Host(`bot.edu-ai.eu`)"
+      - "traefik.http.routers.rasa.entrypoints=websecure"
+      - "traefik.http.routers.rasa.tls.certresolver=myresolver"
+    restart: always
+
+  rasa2:
+    build:
+      context: ./rasa/
+    ports:
+      - "5005"
+    volumes:
+      - ./rasa:/app
+    env_file:
+      - .env
+    command:
+      - run
+      - --cors
+      - "*"
+      - --enable-api
+    networks:
+      - internal
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.rasa2.rule=Host(`bot.edu-ai.eu`)"
+      - "traefik.http.routers.rasa2.entrypoints=websecure"
+      - "traefik.http.routers.rasa2.tls.certresolver=myresolver"
+    restart: always
+
+  rasa3:
+    build:
+      context: ./rasa/
+    ports:
+      - "5005"
+    volumes:
+      - ./rasa:/app
+    env_file:
+      - .env
+    command:
+      - run
+      - --cors
+      - "*"
+      - --enable-api
+    networks:
+      - internal
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.rasa3.rule=Host(`bot.edu-ai.eu`)"
+      - "traefik.http.routers.rasa3.entrypoints=websecure"
+      - "traefik.http.routers.rasa3.tls.certresolver=myresolver"
+    restart: always
+
+  rasa4:
+    build:
+      context: ./rasa/
+    ports:
+      - "5005"
+    volumes:
+      - ./rasa:/app
+    env_file:
+      - .env
+    command:
+      - run
+      - --cors
+      - "*"
+      - --enable-api
+    networks:
+      - internal
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.rasa4.rule=Host(`bot.edu-ai.eu`)"
+      - "traefik.http.routers.rasa4.entrypoints=websecure"
+      - "traefik.http.routers.rasa4.tls.certresolver=myresolver"
+    restart: always
+
+  rasa5:
+    build:
+      context: ./rasa/
+    ports:
+      - "5005"
+    volumes:
+      - ./rasa:/app
+    env_file:
+      - .env
+    command:
+      - run
+      - --cors
+      - "*"
+      - --enable-api
+    networks:
+      - internal
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.rasa5.rule=Host(`bot.edu-ai.eu`)"
+      - "traefik.http.routers.rasa5.entrypoints=websecure"
+      - "traefik.http.routers.rasa5.tls.certresolver=myresolver"
+    restart: always
+
+  action_server:
+    build:
+      context: ./rasa/actions
+    volumes:
+      - ./rasa/actions:/app/actions
+    env_file:
+      - .env
+    ports:
+      - "5055:5055"
+    networks:
+      - internal
+    restart: always
+
+  worker:
+    build:
+      context: ./rasa/actions
+      dockerfile: Dockerfile-celery
+    restart: always
+    networks:
+      - internal
+    env_file:
+      - .env
+    volumes:
+      - ./rasa/actions:/app
+    command: celery -A celery_app.celery worker -l debug -c 4 -Ofair --uid=nobody --gid=nogroup
+    depends_on:
+      - rabbit
+
+  rabbit:
+    image: rabbitmq:latest
+    networks:
+      - internal
+    restart: always
+    ports:
+      - "5672"
+
+networks:
+  web:
+    external: true
+  internal:
+    external: false

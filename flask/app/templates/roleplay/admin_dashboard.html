@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "roleplay/_roleplay_navbar.html" %}
+
+{% macro pagination_nav(pagination, endpoint, pagination_param_name) %}
+<nav aria-label="Navigace stránky">
+    <ul class="pagination justify-content-center mt-3">
+        {% if pagination.has_prev %}
+            {% set prev_link_args = request.args.to_dict() %}
+            {% do prev_link_args.update({pagination_param_name: pagination.prev_num}) %}
+            <li class="page-item"><a class="page-link" href="{{ url_for(endpoint, **prev_link_args) }}">Předchozí</a></li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">Předchozí</span></li>
+        {% endif %}
+
+        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+            {% if page_num %}
+                {% if pagination.page == page_num %}
+                    <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                {% else %}
+                    {% set page_link_args = request.args.to_dict() %}
+                    {% do page_link_args.update({pagination_param_name: page_num}) %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for(endpoint, **page_link_args) }}">{{ page_num }}</a></li>
+                {% endif %}
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+
+        {% if pagination.has_next %}
+            {% set next_link_args = request.args.to_dict() %}
+            {% do next_link_args.update({pagination_param_name: pagination.next_num}) %}
+            <li class="page-item"><a class="page-link" href="{{ url_for(endpoint, **next_link_args) }}">Další</a></li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">Další</span></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endmacro %}
+
+<div class="container mt-5">
+    <div style="height: calc(100vh - 3rem); overflow-y: auto;">
+        <h1>Admin nástěnka</h1>
+        <p>Vítej, {{ current_user.email }}!</p>
+
+        <!-- Summary Statistics -->
+        <div class="row mb-4">
+            <div class="col-lg-2 col-md-4 col-sm-6 col-12 mb-3">
+                <div class="card text-center shadow-sm h-100">
+                    <div class="card-body p-3">
+                        <h5 class="card-title">Celkem uživatelů</h5>
+                        <p class="card-text display-4">{{ total_users if total_users is not none else 0 }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-sm-6 col-12 mb-3">
+                <div class="card text-center shadow-sm h-100">
+                    <div class="card-body p-3">
+                        <h5 class="card-title">Celkem chat sezení</h5>
+                        <p class="card-text display-4">{{ all_chats_pagination.total if all_chats_pagination else 0 }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-sm-6 col-12 mb-3">
+                <div class="card text-center shadow-sm h-100">
+                    <div class="card-body p-3">
+                        <h5 class="card-title">Celkem týmů</h5>
+                        <p class="card-text display-4">{{ all_teams_pagination.total if all_teams_pagination else 0 }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-sm-6 col-12 mb-3">
+                <div class="card text-center shadow-sm h-100">
+                    <div class="card-body p-3">
+                        <h5 class="card-title">Celkem nahlášených zpráv</h5>
+                        <p class="card-text display-4">{{ all_flagged_messages_pagination.total if all_flagged_messages_pagination else 0 }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-sm-6 col-12 mb-3">
+                <div class="card text-center shadow-sm h-100">
+                    <div class="card-body p-3">
+                        <h5 class="card-title">Chaty (posledních 24h)</h5>
+                        <p class="card-text display-4">{{ chats_last_24h if chats_last_24h is not none else 0 }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-sm-6 col-12 mb-3">
+                <div class="card text-center shadow-sm h-100">
+                    <div class="card-body p-3">
+                        <h5 class="card-title">Nahlášení (posledních 24h)</h5>
+                        <p class="card-text display-4">{{ flags_last_24h if flags_last_24h is not none else 0 }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- End of Summary Statistics -->
+
+        <div class="row">
+            <!-- All Chats -->
+            <div class="col-md-12 mb-4">
+                <h2>Všechna chat sezení</h2>
+                {% if all_chats_pagination.items %}
+                    <div>
+                        <ul class="list-group">
+                            {% for chat_session in all_chats_pagination.items %}
+                                <li class="list-group-item">
+                                    <strong>ID sezení:</strong> {{ chat_session.id }} <br>
+                                    <strong>Uživatel:</strong> {{ chat_session.user.email }} <br>
+                                    <strong>ID role:</strong> {{ chat_session.role_id }} <br>
+                                    <strong>Vytvořeno:</strong> {{ chat_session.created_at.strftime('%Y-%m-%d %H:%M:%S') }} <br>
+                                    <a href="{{ url_for('roleplay.admin_chat_history', session_id=chat_session.id) }}" class="btn btn-sm btn-info mt-2">Zobrazit historii</a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {{ pagination_nav(all_chats_pagination, 'roleplay.admin_dashboard', 'page_chats') }}
+                {% else %}
+                    <p>Nebyly nalezeny žádné chat sezení.</p>
+                {% endif %}
+            </div>
+
+            <!-- All Teams -->
+            <div class="col-md-12 mb-4">
+                <h2>Všechny týmy</h2>
+                {% if all_teams_pagination.items %}
+                    <div>
+                        <ul class="list-group">
+                            {% for team in all_teams_pagination.items %}
+                                <li class="list-group-item">
+                                    <strong>Název týmu:</strong> {{ team.name }} <br>
+                                    <strong>Popis:</strong> {{ team.description }} <br>
+                                    <strong>Členové:</strong>
+                                    <ul>
+                                        {% for member in team.members %}
+                                            <li>{{ member.email }}</li>
+                                        {% else %}
+                                            <li>V tomto týmu nejsou žádní členové.</li>
+                                        {% endfor %}
+                                    </ul>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {{ pagination_nav(all_teams_pagination, 'roleplay.admin_dashboard', 'page_teams') }}
+                {% else %}
+                    <p>Nebyly nalezeny žádné týmy.</p>
+                {% endif %}
+            </div>
+
+            <!-- All Flagged Messages -->
+            <div class="col-md-12 mb-4">
+                <h2>Všechny nahlášené zprávy</h2>
+                {% if all_flagged_messages_pagination.items %}
+                    <div>
+                        <ul class="list-group">
+                            {% for flagged_message in all_flagged_messages_pagination.items %}
+                                <li class="list-group-item">
+                                    <strong>ID nahlášení:</strong> {{ flagged_message.id }} <br>
+                                    <strong>ID sezení:</strong> {{ flagged_message.session_id }} <br>
+                                    <strong>Uživatel:</strong> {{ flagged_message.user.email }} <br>
+                                    {% if flagged_message.team %}
+                                        <strong>Tým:</strong> {{ flagged_message.team.name }} <br>
+                                    {% endif %}                                    <strong>Obsah:</strong> <pre style="white-space: pre-wrap; word-break: break-all;">{{ flagged_message.content }}</pre> <br>
+                                    <strong>Shrnutí:</strong> 
+                                    {% set clean_summary = flagged_message.summary %}
+                                    {% if flagged_message.summary and ('AI analýza: Chyba při analýze:' in flagged_message.summary or 'AI analýza: Úspěšně nachytaný AI asistent' in flagged_message.summary or 'severity' in flagged_message.summary or 'Analýza AI selhala' in flagged_message.summary or 'Chyba při analýze:' in flagged_message.summary) %}
+                                        {% set clean_summary = 'Úspěšně nachytaný AI asistent' %}
+                                    {% endif %}
+                                    {{ clean_summary }} <br>
+                                    <strong>Časové razítko:</strong> {{ flagged_message.timestamp.strftime('%Y-%m-%d %H:%M:%S') }} <br>
+                                    <strong>Veřejné:</strong> {{ flagged_message.is_public }} <br>
+                                    <a href="{{ url_for('roleplay.admin_chat_history', session_id=flagged_message.session_id) }}" class="btn btn-sm btn-info mt-2">Zobrazit kontext chatu</a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {{ pagination_nav(all_flagged_messages_pagination, 'roleplay.admin_dashboard', 'page_flags') }}
+                {% else %}
+                    <p>Nebyly nalezeny žádné nahlášené zprávy.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

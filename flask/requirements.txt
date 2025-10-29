@@ -1,3 +1,4 @@
+redis
 aiohttp==3.8.1
 aiosignal==1.2.0
 alembic==1.7.6
@@ -52,3 +53,5 @@ Werkzeug==2.0.2
 WTForms==3.0.1
 yarl==1.7.2
 hashids
+openai==0.27.8
+psutil

@@ -1,5 +1,5 @@
 action_endpoint:
-    url: "http://action_server:5055/webhook"
+  url: "http://action_server:5055/webhook"
 
 tracker_store:
     type: SQL
@@ -8,3 +8,10 @@ tracker_store:
     db: "edu"
     username: "root"
     password: ${MYSQL_ROOT_PASSWORD}
+
+lock_store:
+    type: "redis"
+    url: redis
+    port: 6379
+#    db: 0
+#    password: null

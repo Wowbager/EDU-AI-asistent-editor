@@ -1,0 +1,154 @@
+<div class="card shadow-sm" id="chat-container" style="display: none;">
+    <div class="card-header bg-info text-white py-2">
+        <div class="d-flex justify-content-between align-items-center">
+            <button id="new-chat-btn" class="btn btn-sm btn-outline-light">
+                <i class="fas fa-plus"></i>
+            </button>
+            <div id="role-display" class="text-center text-white small mx-2 flex-grow-1"></div>
+            <button id="direct-custom-chat-btn-header" class="btn btn-sm btn-outline-light d-md-none">
+                <i class="fas fa-magic"></i> Vlastní
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="chat-log" class="chat-log-scrollable"></div>
+        <div id="chat-input-group" class="d-flex align-items-end">
+            <textarea id="msg-input" class="form-control me-2" rows="1" placeholder="Napište zprávu... (max 1000 znaků)"></textarea>
+            <div class="btn-group-vertical">
+                <button id="send-btn" class="btn btn-primary">
+                    <i class="fas fa-paper-plane"></i> Odeslat
+                </button>
+                <button id="clear-btn" class="btn btn-outline-secondary btn-sm d-none d-md-inline-block">
+                    <i class="fas fa-eraser"></i> Vymazat
+                </button>
+            </div>
+        </div>
+        <div id="char-counter" class="text-muted small mt-1 text-end">0/1000 znaků</div>
+        <div id="processing-indicator" class="text-center mt-2" style="display: none;">
+            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <span class="text-muted small ms-2">Zpracovávám zprávu...</span>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-success" id="flag-alert" style="display: none; position: fixed; top: 20px; right: 20px; z-index: 1050;">
+</div>
+
+<!-- Custom Chat Instructions Modal -->
+<div class="modal fade" id="customChatModal" tabindex="-1" role="dialog" aria-labelledby="customChatModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="customChatModalLabel">
+                    <i class="fas fa-magic me-2"></i>Definovat vlastní chat
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group mb-3">
+                    <label for="custom-role-name" class="form-label fw-bold">
+                        <i class="fas fa-user me-2"></i>Název vlastní role
+                    </label>
+                    <input type="text" class="form-control" id="custom-role-name" placeholder="Např. Albert Einstein, Zkušený detektiv">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="custom-role-brief" class="form-label fw-bold">
+                        <i class="fas fa-info-circle me-2"></i>Stručný popis role
+                    </label>
+                    <input type="text" class="form-control" id="custom-role-brief" placeholder="Např. Fyzik, řeší záhady">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="custom-role-subject" class="form-label fw-bold">
+                        <i class="fas fa-graduation-cap me-2"></i>Předmět/Oblast specializace
+                    </label>
+                    <input type="text" class="form-control" id="custom-role-subject" placeholder="Např. Fyzika, Kriminalistika">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="custom-instructions" class="form-label fw-bold">
+                        <i class="fas fa-edit me-2"></i>Vlastní instrukce pro AI
+                    </label>
+                    <small class="form-text text-muted d-block mb-2">
+                        Popište, jak se má AI chovat, představit a komunikovat
+                    </small>
+                    <textarea class="form-control" id="custom-instructions" rows="5" placeholder="Např. Jsi Albert Einstein. Představ se, mluv o fyzice, buď trochu excentrický..."></textarea>
+                    <small id="custom-char-counter" class="form-text text-muted">0/1500 znaků</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Zavřít
+                </button>
+                <button type="button" class="btn btn-primary" id="start-custom-chat-btn">
+                    <i class="fas fa-rocket"></i> Spustit vlastní chat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Flag Summary Modal -->
+<div class="modal fade" id="flagSummaryModal" tabindex="-1" role="dialog" aria-labelledby="flagSummaryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="flagSummaryModalLabel">
+                    <i class="fas fa-flag me-2"></i>Shrnutí úlovku
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Zavřít">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Popište svůj úlovek</strong> - Popište čím je zajímavý nebo špatně.
+                </div>
+                <div class="form-group mb-3">
+                    <label for="flag-summary-input" class="form-label fw-bold">Shrnutí problému:</label>
+                    <textarea id="flag-summary-input" class="form-control" rows="3" placeholder="Zadej shrnutí (max 250 znaků)" maxlength="250"></textarea>
+                    <small id="flag-summary-char-counter" class="form-text text-muted">0/250 znaků</small>
+                </div>
+
+                {% if user_teams and user_teams|length > 0 %}
+                <div class="form-group mb-3">
+                    <label for="flag-team-select" class="form-label fw-bold">
+                        <i class="fas fa-users me-2"></i>Zveřejnit pod týmem (volitelné):
+                    </label>
+                    <select id="flag-team-select" class="form-control">
+                        <option value="">Nezveřejňovat pod týmem (osobní úlovek)</option>
+                        {% for team in user_teams %}
+                            <option value="{{ team.id }}"{% if loop.first %} selected{% endif %}>{{ team.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                
+                <div class="form-group form-check">
+                    <input type="checkbox" class="form-check-input" id="flag-is-public-check" checked>
+                    <label class="form-check-label" for="flag-is-public-check">
+                        <i class="fas fa-globe me-2"></i>Zveřejnit tento úlovek
+                    </label>
+                    <small class="form-text text-muted">
+                        {% if user_teams and user_teams|length > 0 %}
+                        Pokud není zveřejněno pod týmem, toto učiní tvůj osobní úlovek viditelným pro ostatní.
+                        {% else %}
+                        Toto učiní tvůj osobní úlovek viditelným pro ostatní.
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Zrušit
+                </button>
+                <button type="button" class="btn btn-warning" id="submit-flag-summary-btn">
+                    <i class="fas fa-flag"></i> Odeslat úlovek
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}Chat Historie - Admin{% endblock %}
+
+{% include "roleplay/_roleplay_navbar.html" %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    <i class="fas fa-history me-2"></i>
+                    Historie chatu
+                    <small class="text-muted">{{ session_id }}</small>
+                </h2>
+                <a href="{{ url_for('roleplay.admin_dashboard') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Zpět na dashboard
+                </a>
+            </div>
+
+            <!-- Chat Session Info -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Informace o sezení
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>ID sezení:</strong> {{ chat_session.id }}<br>
+                            <strong>Uživatel:</strong> {{ chat_session.user.email }}<br>
+                            <strong>Role ID:</strong> {{ chat_session.role_id }}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Vytvořeno:</strong> {{ chat_session.created_at.strftime('%d.%m.%Y %H:%M:%S') }}<br>
+                            <strong>Počet nahlášení:</strong> 
+                            <span class="badge {% if flagged_messages_for_session|length > 0 %}badge-warning{% else %}badge-secondary{% endif %}">
+                                {{ flagged_messages_for_session|length }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-comments me-2"></i>Zprávy 
+                        <small class="text-muted">({{ chat_history|length }} zpráv)</small>
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if chat_history %}
+                        <div class="chat-container" style="max-height: 600px; overflow-y: auto;">
+                            {% for message in chat_history %}
+                                {% set is_flagged = false %}
+                                {% set flag_info = none %}
+                                {% for flagged_msg in flagged_messages_for_session %}
+                                    {% if flagged_msg.content == message.content %}
+                                        {% set is_flagged = true %}
+                                        {% set flag_info = flagged_msg %}
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                <div class="message-item p-3 border-bottom 
+                                    {% if is_flagged %}bg-warning-light{% elif message.role == 'user' %}bg-primary-light{% elif message.role == 'assistant' %}bg-info-light{% else %}bg-light{% endif %}">
+                                    
+                                    <div class="d-flex align-items-start">
+                                        <div class="message-avatar me-3">
+                                            {% if message.role == 'user' %}
+                                                <div class="avatar bg-primary text-white">
+                                                    <i class="fas fa-user"></i>
+                                                </div>
+                                            {% elif message.role == 'assistant' %}
+                                                <div class="avatar bg-info text-white">
+                                                    <i class="fas fa-robot"></i>
+                                                </div>
+                                            {% else %}
+                                                <div class="avatar bg-secondary text-white">
+                                                    <i class="fas fa-cog"></i>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <div class="message-content flex-grow-1">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <div>
+                                                    <strong class="message-role">{{ message.role.title() }}</strong>
+                                                    {% if is_flagged %}
+                                                        <span class="badge badge-danger ms-2">
+                                                            <i class="fas fa-flag me-1"></i>NAHLÁŠENO
+                                                        </span>
+                                                    {% endif %}
+                                                </div>
+                                                <small class="text-muted">
+                                                    {{ message.timestamp.strftime('%d.%m.%Y %H:%M:%S') if message.timestamp else 'N/A' }}
+                                                </small>
+                                            </div>
+                                            
+                                            <div class="message-text">
+                                                <pre class="mb-0" style="white-space: pre-wrap; word-break: break-word; font-family: inherit; background: none; border: none; padding: 0;">{{ message.content }}</pre>
+                                            </div>
+                                            
+                                            {% if is_flagged and flag_info %}
+                                                <div class="alert alert-warning mt-2 mb-0">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div>
+                                                            <strong>Nahlášeno uživatelem:</strong> {{ flag_info.user.email }}<br>
+                                                            <strong>Čas nahlášení:</strong> {{ flag_info.timestamp.strftime('%d.%m.%Y %H:%M:%S') }}<br>
+                                                            {% if flag_info.team %}
+                                                                <strong>Tým:</strong> {{ flag_info.team.name }}<br>
+                                                            {% endif %}
+                                                            {% if flag_info.summary %}
+                                                                <strong>Shrnutí:</strong> {{ flag_info.summary }}
+                                                            {% endif %}
+                                                        </div>
+                                                        <div>
+                                                            {% if flag_info.is_public %}
+                                                                <span class="badge badge-success">Veřejné</span>
+                                                            {% else %}
+                                                                <span class="badge badge-secondary">Soukromé</span>
+                                                            {% endif %}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="p-4 text-center text-muted">
+                            <i class="fas fa-comments fa-3x mb-3"></i>
+                            <p>Pro toto sezení nebyla nalezena žádná historie chatu.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Flagged Messages Summary -->
+            {% if flagged_messages_for_session %}
+                <div class="card mt-4">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="fas fa-flag me-2"></i>Shrnutí nahlášení
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Čas</th>
+                                        <th>Nahlásil</th>
+                                        <th>Tým</th>
+                                        <th>Shrnutí</th>
+                                        <th>Stav</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for flag in flagged_messages_for_session %}
+                                    <tr>
+                                        <td>{{ flag.timestamp.strftime('%d.%m. %H:%M') }}</td>
+                                        <td>{{ flag.user.email }}</td>
+                                        <td>
+                                            {% if flag.team %}
+                                                {{ flag.team.name }}
+                                            {% else %}
+                                                <span class="text-muted">Osobní</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ flag.summary if flag.summary else 'Bez shrnutí' }}</td>
+                                        <td>
+                                            {% if flag.is_public %}
+                                                <span class="badge badge-success">Veřejné</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">Soukromé</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+.bg-primary-light {
+    background-color: rgba(78, 115, 223, 0.1);
+}
+
+.bg-info-light {
+    background-color: rgba(54, 185, 204, 0.1);
+}
+
+.bg-warning-light {
+    background-color: rgba(246, 194, 62, 0.2);
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.message-item {
+    transition: background-color 0.2s ease;
+}
+
+.message-item:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.chat-container {
+    border: 1px solid #e3e6f0;
+}
+</style>
+{% endblock %}

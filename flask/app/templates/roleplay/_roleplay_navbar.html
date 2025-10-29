@@ -1,0 +1,53 @@
+{% include "roleplay/styles.html" %}
+<nav class="navbar navbar-expand-lg navbar-light bg-light mb-3 shadow-sm">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="{{ url_for('roleplay.roleplay_home') }}">
+            <i class="fas fa-comments me-2"></i>Nachytej AI!
+        </a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#roleplayNav" aria-controls="roleplayNav" aria-expanded="false" aria-label="Přepnout navigaci">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="roleplayNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('roleplay.roleplay_home') }}">
+                        <i class="fas fa-comments me-2"></i>Chat
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('roleplay.teams') }}">
+                        <i class="fas fa-users me-2"></i>Týmy
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('roleplay.flagged_messages') }}">
+                        <i class="fas fa-flag me-2"></i>Moje úlovky
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('roleplay.public_flagged_messages') }}">
+                        <i class="fas fa-globe me-2"></i>Zveřejněné úlovky
+                    </a>
+                </li>
+            </ul>
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                    <span class="navbar-text">
+                        <i class="fas fa-user me-2"></i>{{ current_user.email if current_user.is_authenticated else 'Nepřihlášen' }}
+                    </span>
+                </li>
+                <li class="nav-item">
+                    {% if current_user.is_authenticated %}
+                        <a class="nav-link" href="/admin/logout">
+                            <i class="fas fa-sign-out-alt me-2"></i>Odhlásit se
+                        </a>
+                    {% else %}
+                        <a class="nav-link" href="/login">
+                            <i class="fas fa-sign-in-alt me-2"></i>Přihlásit se
+                        </a>
+                    {% endif %}
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>

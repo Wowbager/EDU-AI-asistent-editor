@@ -1,0 +1,411 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<body>
+    <div class="layout">
+        <div class="content">
+            {% include 'admin/nav.html' %}
+
+            <div class="sidebar-group">
+                <div id="{% if 'chats-with-comments' in request.path %}chatswithcomments{% elif 'chats-with-nlu' in request.path %}chatswithnlu{% elif 'chats-with-gdpr' in request.path %}chatswithgdpr{% else %}chats{% endif %}"
+                    class="sidebar active">
+                    <header>
+                        <div class="d-flex align-items-center">
+                            <button class="btn btn-outline-light mobile-navigation-button mr-3 d-xl-none d-inline">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                                </svg>
+                            </button>
+                            <span class="sidebar-title">Konverzace
+                                {% if "chats-with-comments" in request.path %}
+                                s anotacemi
+                                {% elif "chats-with-nlu" in request.path %}
+                                s AI
+                                {% elif "chats-with-gdpr" in request.path %}
+                                s GDPR
+                                {% else %}
+
+                                {% endif %}
+                            </span>
+                        </div>
+                    </header>
+                    <form>
+                        <input type="text" class="form-control" id="search" placeholder="Hledat v konverzacích">
+                    </form>
+                    <div class="sidebar-body">
+                        <ul class="list-group list-group-flush" id="loader">
+                            {% for conversation in conversations %}
+                            <li data-sender_id="{{conversation.sender_id}}"
+                                class="list-group-item {% if conversation.sender_id|string == request.view_args['sender_id'] %}open-chat{%endif%}">
+                                <figure class="avatar">
+                                    <span class="avatar-title rounded-circle"
+                                        style="background-color: #{{conversation.sender_id[-4:]}}00">{{conversation.sender_id[-1:]}}</span>
+                                </figure>
+                                <div class="users-list-body">
+                                    <div>
+                                        <h5>{{conversation.sender_name}}</h5>
+                                        <p>{{conversation.latest_text}}</p>
+                                    </div>
+                                    <div class="users-list-action">
+                                        <small class="text-muted">{{conversation.latest_timestamp}}</small>
+                                    </div>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        <div id="loadmore" style="overflow:hidden"></div>
+                        <div class="justify-content-center" style="display:flex" id="loading">
+                            <div class="spinner-border" role="status"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="chat {% if sender_id%}open{% endif %}">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="container" style="margin-top:15px">
+                    <div class="alert alert-{{ category }} alert-dismissible" role="alert">
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span
+                                aria-hidden="true">&times;</span>
+                        </button>{{ message }}
+                    </div>
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+                {% if request.path == "/admin/chats" or request.path == "/admin/chats-with-comments" or request.path ==
+                "/admin/chats-with-nlu" or request.path == "/admin/chats-with-gdpr" %}
+                <div class="chat-body">
+                    <div class="no-message-container">
+                        <div class="row my-5">
+                            <div class="col-md-4 offset-4">
+                                <img src="/static/media/svg/undraw_empty_xct9.svg" class="img-fluid" alt="image">
+                            </div>
+                        </div>
+                        <div class="row my-5">
+                            <div class="col-md-4 offset-md-4">
+                                <p class="lead">Vyberte si z bočního menu</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% else %}
+                <div class="chat-header">
+                    <div class="chat-header-user">
+                        <a class="btn btn-outline-light" href="javascript:void(0);" id="back2chats">
+                            <i class="fas fa-arrow-left"></i>
+                        </a>
+                        <figure class="avatar">
+                            <span class="avatar-title rounded-circle"
+                                style="background-color: #{{sender_id[-4:] if sender_id is defined}}00">{{sender_id[-1:]
+                                if sender_id is defined}}</span>
+                        </figure>
+                        <div>
+                            <h5>{{sender_name if sender_name is defined}}</h5>
+                        </div>
+                        <a href="javascript:void(0);" class="btn btn-outline-light contact-mobile"
+                            data-navigation-target="contact-information">
+                            <i data-feather="more-horizontal"></i>
+                        </a>
+                    </div>
+                    <div class="d-flex">
+                        <input name='tags' placeholder='Search with your phrases'
+                            style="width: 350px;border-radius: 5px;height: auto;border: 1px solid #e6e6e6;padding: 10px 15px;">
+                        <a href="javascript:void(0);" class="btn btn-outline-light contact-desktop"
+                            data-navigation-target="contact-information">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" class="feather feather-more-horizontal">
+                                <circle cx="12" cy="12" r="1"></circle>
+                                <circle cx="19" cy="12" r="1"></circle>
+                                <circle cx="5" cy="12" r="1"></circle>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+                <div class="chat-body">
+                    <div class="justify-content-center" style="display:flex" id="loading2">
+                        <div class="spinner-border" role="status"></div>
+                    </div>
+                    <div id="loadmore2" style="overflow:hidden;"></div>
+                    <div class="messages"></div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="sidebar-group">
+                <div id="contact-information" class="sidebar">
+                    <header>
+                        <span class="sidebar-title">Profil</span>
+                        <ul class="list-inline">
+                            <li class="list-inline-item">
+                                <a href="#" class="btn btn-outline-light text-danger sidebar-close"
+                                    style="display:block !important;">
+                                    <i style="display:block !important;" data-feather="x"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    </header>
+                    <div class="sidebar-body">
+                        <div class="pl-4 pr-4">
+                            <div class="text-center">
+                                <figure class="avatar avatar-xl mb-4">
+                                    <span class="avatar-title rounded-circle"
+                                        style="background-color: #{{sender_id[-4:]  if sender_id is defined}}00">{{sender_id[-1:]
+                                        if sender_id is defined}}</span>
+                                </figure>
+                                <h5 class="mb-1">{{sender_id if sender_id is defined}}</h5>
+                                <ul class="nav nav-tabs justify-content-center mt-5" id="myTab" role="tablist">
+                                    <li class="nav-item">
+                                        <a class="nav-link active" id="home-tab" data-toggle="tab" href="#home"
+                                            role="tab" aria-controls="home" aria-selected="true">Informace</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" id="profile-tab" data-toggle="tab" href="#profile"
+                                            role="tab" aria-controls="profile" aria-selected="false">Odkazy</a>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="tab-content" id="myTabContent">
+                                <div class="tab-pane fade show active" id="home" role="tabpanel"
+                                    aria-labelledby="home-tab">
+                                    <!-- <p class="text-muted">Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p> -->
+                                    <div class="mt-4 mb-4">
+                                        <h6>Email</h6>
+                                        <p class="text-muted infobox-email"></p>
+                                    </div>
+                                    <div class="mt-4 mb-4">
+                                        <h6>Telefon</h6>
+                                        <p class="text-muted infobox-phone"></p>
+                                    </div>
+                                    <div class="mt-4 mb-4">
+                                        <h6>Telegram</h6>
+                                        <p class="text-muted infobox-telegram"></p>
+                                    </div>
+                                    <div class="mt-4 mb-4">
+                                        <h6>Datum ověření telefonem</h6>
+                                        <p class="text-muted infobox-date_verified"></p>
+                                    </div>
+                                    <div class="mt-4 mb-4">
+                                        <h6>Datum souhlasu</h6>
+                                        <p class="text-muted infobox-agreement_date"></p>
+                                    </div>
+                                    <div class="mt-4 mb-4">
+                                        <h6>Zajímá mě další procvičování (můj věk)</h6>
+                                        <p class="text-muted infobox-opt_practice"></p>
+                                    </div>
+                                    <div class="mt-4 mb-4">
+                                        <h6>Chci info o free vzdělávacích nástrojích</h6>
+                                        <p class="text-muted infobox-opt_info"></p>
+                                    </div>
+                                    <div class="mt-4 mb-4">
+                                        <h6>Jsem starší 16 let</h6>
+                                        <p class="text-muted infobox-opt_over_16_years"></p>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="profile" role="tabpanel" aria-labelledby="profile-tab">
+                                    <h6 class="mb-3 d-flex align-items-center justify-content-between">
+                                        <span>Odkazy</span>
+                                    </h6>
+                                    <div>
+                                        <ul class="list-group list-group-flush"></ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+
+        var annotations = [];
+
+        var colors = [{ className: "blue" }, { className: "green", }, { className: "orange", }, { className: "red", },];
+        var annotator = Object.create(Annotator);
+        annotator.init({
+            containerElement: ".chat-body .messages",
+            annotations: annotations,
+            colors: colors,
+        });
+
+        annotator.startListening();
+        window.annotator = annotator;
+
+        function scrollIntoViewTillSenderId(id2find) {
+            var item2find = $("#loader li.list-group-item[data-sender_id='" + id2find + "']");
+            if (item2find.length < 1) {
+                $('.sidebar-body').first().scrollTop($('.sidebar-body').first().prop("scrollHeight"));
+            } else {
+                item2find[0].scrollIntoView({ block: 'center' });
+            }
+        }
+
+        if (localStorage.getItem("visited") == null) {
+            localStorage.setItem("visited", JSON.stringify([]));
+        }
+
+
+        var counter = 1;
+        var counter2 = 1;
+        var chats_with_comments = 0;
+        var chats_with_nlu = 0;
+        var chats_with_gdpr = 0;
+        var target = 'chats';
+        var loadmore = $('#loadmore')[0];
+        var loadmore2 = $('#loadmore2')[0];
+
+        {% if sender_id and sender_id != "" and counter != "" %}
+        counter = parseInt("{{counter}}");
+        {% endif %}
+
+        {% if sender_id != "" and counter2 != "" %}
+        counter2 = parseInt("{{counter2}}");
+        {% endif %}
+
+        {% if target == "chats-with-comments" %}
+        chats_with_comments = 1;
+        {% endif %}
+
+        {% if target == "chats-with-nlu" %}
+        chats_with_nlu = 1;
+        {% endif %}
+
+        {% if target == "chats-with-gdpr" %}
+        chats_with_gdpr = 1;
+        {% endif %}
+
+        function loadConversations(search = "", new_search = 0) {
+
+            visited = JSON.parse(localStorage.getItem("visited"));
+
+            if (new_search) {
+                counter = 1;
+                intersectionObserver.unobserve(loadmore);
+                $('#loader').empty();
+                $('#chats-visible').text(0);
+            }
+
+            if (!counter || isNaN(counter)) {
+                counter = 1;
+            }
+
+            $.ajax({
+                url: "/admin/ajax/chats?p=" + counter + "&s=" + search + "&c=" + chats_with_comments + "&nlu=" + chats_with_nlu + "&gdpr=" + chats_with_gdpr,
+                type: 'GET',
+                dataType: 'json',
+                success: function (response) {
+                    var data = response.conversations;
+                    if (!data.length) {
+                        $("#loading").hide();
+                        intersectionObserver.unobserve(loadmore);
+                    } else if (data.length < 20) {
+                        intersectionObserver.unobserve(loadmore);
+                    } else if (data.length == 20) {
+                        intersectionObserver.observe(loadmore);
+                        counter = parseInt(counter) + 1;
+                    }
+
+                    $("#chats-visible").text($("#loader li:visible").length + data.length);
+                    $("#chats-total").text(response.conversations_count);
+
+                    for (var i = 0; i < data.length; i++) {
+
+                        if ($("#loader").find("li[data-sender_id='" + data[i]["sender_id"] + "'").length < 1) {
+                            $("#loader").append(`
+						<li data-sender_id="`+ data[i]["sender_id"] + `" class="list-group-item ` + (("{{request.path}}".includes(data[i]["sender_id"]) || window.location.href.split("/").pop().includes(data[i]["sender_id"])) ? "open-chat" : "") + (visited.includes(data[i]["sender_id"]) ? "visited " : "") + `">
+							<figure class="avatar">
+								<span class="avatar-title rounded-circle" style="background-color: #`+ data[i]['sender_id'].substr(-4) + `00">` + data[i]['sender_id'].substr(-1) + `</span>
+							</figure>
+							<div class="users-list-body">
+								<div>
+									<h5>`+ data[i]['sender_name'] + `</h5>
+									<p>`+ data[i]['latest_text'] + `</p>
+								</div>
+								<div class="users-list-action">
+									<div class='new-message-count' style='display:none'></div>
+									<small class="new-message-time text-muted">`+ data[i]['latest_timestamp'] + `</small>
+								</div>
+							</div>
+						</li>
+						`);
+                        }
+                    }
+                    $("#loading").hide();
+                }
+            });
+        }
+
+        function isScrollable(e) {
+            if (e.scrollTopMax !== undefined)
+                return e.scrollTopMax > 0; //All Hail Firefox and it's superior technology!
+
+            if (e == document.scrollingElement) //If what you're checking is BODY (or HTML depending on your css styles)
+                return e.scrollHeight > e.clientHeight; //This is a special case.
+
+            return e.scrollHeight > e.clientHeight && ["scroll", "auto"].indexOf(getComputedStyle(e).overflowY) >= 0
+        }
+
+        let timehandler = 0;
+        $(document).on('input', '#search', function () {
+            clearTimeout(timehandler);
+            timehandler = setTimeout(function () {
+                loadConversations($("#search").val(), 1);
+            }, 300);
+        });
+
+        var intersectionObserver = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting == false || entries[0] < 0) {
+                return;
+            }
+            loadConversations($('#search').val());
+        });
+        intersectionObserver.observe(loadmore);
+
+        {% if sender_id %}
+        setTimeout(function () {
+            $(".chat-body").scrollTop($(".chat-body").height() * 1000);
+        }, 500);
+        rebind_scroll_messages();
+
+        // hack - load more if its not scrollable ;-)
+        if (!isScrollable($(".chat-body").first())) {
+            $(".chat-body").trigger("scroll");
+        }
+        {% endif %}
+
+        {% if sender_id != "" %}
+        counter = parseInt("{{counter}}");
+        scrollIntoViewTillSenderId("{{sender_id}}");
+        $(".chat-body").scrollTop($(".chat-body").height() * 1000);
+        {% endif %}
+
+
+        window.setTimeout(fix_slots, 1000);
+        $('[name=tags]').tagify();
+        $("[name=tags]").on("input", function (event) {
+            event.preventDefault();
+            let query = $("[name=tags]").val();
+            let active_li = $(".list-group-item.open-chat").first();
+            $(active_li).attr("data-counter", 1);
+            $(".messages").empty();
+            loadMoreMessages($(active_li).attr("data-sender_id"), 1, query);
+            setTimeout(function () {
+                $(".chat-body").scrollTop($(".chat-body").height() * 1000);
+            }, 500);
+        });
+    });
+</script>
+{% endblock %}

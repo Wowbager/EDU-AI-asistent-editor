@@ -1927,174 +1927,287 @@ def logout():
     flash("Úspěšně odhlášeno", "info")
     return redirect(url_for("public.login"))
 
-@admin.route("/chats")
+@admin.route("/chats", methods=["GET", "POST"])
+@login_required
 def chats():
-    page     = request.args.get("p", 1, type=int)
-    per_page = 20
-    search   = request.args.get("s", "").strip()
-    offset   = (page - 1) * per_page
-
-    sql = text("""
-      WITH latest AS (
-        SELECT
-          sender_id,
-          MAX(id) AS last_event_id
-        FROM events
-        WHERE type_name IN ('user','bot','slot')
-          AND (:search = '' OR data->>'$.text' LIKE :search)
-        GROUP BY sender_id
-      )
-      SELECT
-        e.sender_id,
-        e.data            AS raw_data,
-        e.`timestamp`     AS event_ts
-      FROM events e
-      JOIN latest l
-        ON e.id = l.last_event_id
-      ORDER BY l.last_event_id DESC
-      LIMIT :offset, :limit
-    """)
-
-    rows = db.session.execute(sql, {
-        "search": f"%{search}%",
-        "offset": offset,
-        "limit":  per_page
-    }).fetchall()
-
-    conversations = []
-    for sender_id, raw_data, event_ts in rows:
-        ev = raw_data if isinstance(raw_data, dict) else json.loads(raw_data)
-        # use the JSON‐stored ts if present, otherwise fallback
-        tval = ev.get("timestamp", event_ts)
-        ts   = datetime.fromtimestamp(tval)
-        conversations.append({
-            "sender_id":        sender_id,
-            "latest_text":      ev.get("text", ""),
-            "latest_timestamp": (
-                ts.strftime("%H:%M:%S")
-                if ts.date() == datetime.utcnow().date()
-                else ts.strftime("%d.%m")
-            ),
-        })
-
-    return render_template(
-        "admin/chats.html",
-        conversations=conversations,
-        page=page,
-        per_page=per_page,
-        search=search,
-    )
+    if not current_user.is_super_admin:
+        return redirect(url_for("admin.courses"))
+    
+    return render_template("admin/chats.html", target="chats")
 
 
-
-@admin.route("/chats/<sender_id>")
+@admin.route("/chats/<sender_id>", methods=["GET", "POST"])
+@login_required
 def chat_detail(sender_id):
-    # Pagination settings
+    if not current_user.is_super_admin:
+        return redirect(url_for("admin.courses"))
+
+    # --- Sidebar: last 50 conversations (reuse your existing cache/key logic) ---
+    cache_key = get_cache_key("conversations_sidebar")
+    conversations2send = get_from_cache(cache_key)
+    if conversations2send is None:
+        sql_conv = text("""
+          WITH latest_events AS (
+            SELECT
+              sender_id,
+              MAX(COALESCE((data->>'$.timestamp')+0, `timestamp`)) AS last_message_date
+            FROM events
+            WHERE type_name IN ('user','bot')
+            GROUP BY sender_id
+            ORDER BY last_message_date DESC
+            LIMIT 50
+          )
+          SELECT
+            le.sender_id,
+            (SELECT COUNT(*) 
+               FROM events e2
+               WHERE e2.sender_id = le.sender_id
+                 AND e2.type_name IN ('user','bot')
+            ) AS message_count,
+            le.last_message_date,
+            (SELECT data->>'$.text'
+               FROM events e3
+               WHERE e3.sender_id = le.sender_id
+                 AND e3.type_name = 'user'
+               ORDER BY COALESCE((e3.data->>'$.timestamp')+0, e3.`timestamp`) DESC,
+                        e3.id DESC
+               LIMIT 1
+            ) AS last_text
+          FROM latest_events le
+          ORDER BY le.last_message_date DESC
+        """)
+        rows = db.session.execute(sql_conv).fetchall()
+
+        conversations2send = []
+        for sender, count, ts_val, last_text in rows:
+            dt = datetime.fromtimestamp(ts_val)
+            ts = dt.strftime("%H:%M:%S") if dt.date()==datetime.utcnow().date() else dt.strftime("%d.%m")
+            snippet = (last_text or "")[:50]
+            conversations2send.append({
+                "sender_name": sender,
+                "sender_id":   sender,
+                "latest_text": snippet + ("…" if last_text and len(last_text)>50 else ""),
+                "latest_timestamp": ts,
+            })
+        set_cache(cache_key, conversations2send)
+
+    # find which page this sender lives on
     per_page = 20
-
-    # 1) Fetch every conversation’s most‐recent event
-    sql_all = text("""
-      WITH latest AS (
-        SELECT
-          sender_id,
-          MAX(id) AS last_event_id
-        FROM events
-        WHERE type_name IN ('user','bot','slot')
-        GROUP BY sender_id
-      )
-      SELECT
-        e.sender_id,
-        e.data       AS raw_data,
-        e.`timestamp` AS event_ts
-      FROM events e
-      JOIN latest l ON e.id = l.last_event_id
-      ORDER BY e.`timestamp` DESC, e.id DESC
-    """)
-    rows = db.session.execute(sql_all).fetchall()
-
-    # 2) Build a Python list of all conversations
-    all_convs = []
-    for sender, raw_data, ts in rows:
-        ev = raw_data if isinstance(raw_data, dict) else json.loads(raw_data)
-        tval = ev.get("timestamp", ts)
-        dt = datetime.fromtimestamp(tval)
-        all_convs.append({
-            "sender_id":       sender,
-            "latest_text":     ev.get("text", ""),
-            "latest_timestamp": (
-                dt.strftime("%H:%M:%S") 
-                if dt.date() == datetime.utcnow().date() 
-                else dt.strftime("%d.%m")
-            ),
-        })
-
-    # 3) Find the zero‑based index of our selected sender
     try:
-        position = next(i for i,c in enumerate(all_convs) if c["sender_id"] == sender_id)
+        idx = next(i for i,c in enumerate(conversations2send) if c["sender_id"]==sender_id)
     except StopIteration:
-        # not found → back to list
-        return redirect(url_for("chats.chats"))
+        idx = 0
+    page_number = math.ceil((idx+1)/per_page)
+    start = (page_number-1)*per_page
+    sidebar_page = conversations2send[start:start+per_page]
 
-    # 4) Calculate which page that lives on
-    counter = math.ceil((position + 1) / per_page)
-
-    # 5) Slice out just that page’s worth of conversations
-    start = (counter - 1) * per_page
-    page_convs = all_convs[start : start + per_page]
-
-    # 6) Render with exactly the same template vars as before
-    return render_template(
-        "admin/chats.html",
-        conversations=page_convs,
-        sender_name=sender_id,    # no User table; just display ID
-        sender_id=sender_id,
-        counter=counter,
-        target="chats",
-    )
-
-@admin.route("/ajax/chats/<sender_id>")
-def chats_ajax_detail(sender_id):
-    page     = request.args.get("p", 1, type=int)
-    per_page = 100
-    offset   = (page - 1) * per_page
-    search   = request.args.get("q", "").strip()
-
-    base_sql = """
+    # --- Full conversation: no pagination, oldest→newest ---
+    sql_msgs = text("""
       SELECT
         id,
-        data            AS raw_data,
-        `timestamp`     AS event_ts,
-        type_name
+        type_name,
+        COALESCE((data->>'$.timestamp')+0, `timestamp`)  AS ts_val,
+        data->>'$.text' AS text
       FROM events
       WHERE sender_id = :sender_id
-        AND type_name IN ('user','bot','slot')
-    """
-    if search:
-        base_sql += " AND data->>'$.text' LIKE :search"
-    base_sql += " ORDER BY event_ts DESC, id DESC LIMIT :offset, :limit"
+        AND type_name IN ('user','bot')
+      ORDER BY ts_val ASC, id ASC
+    """)
+    msg_rows = db.session.execute(sql_msgs, {"sender_id": sender_id}).fetchall()
 
-    sql = text(base_sql)
-    params = {
-        "sender_id": sender_id,
-        "offset":     offset,
-        "limit":      per_page,
-    }
-    if search:
-        params["search"] = f"%{search}%"
+    messages = []
+    for mid, tname, ts_val, text_val in msg_rows:
+        dt = datetime.fromtimestamp(ts_val)
+        ts = dt.strftime("%d.%m.%Y - %H:%M:%S")
+        speaker = "user" if tname=="user" else "bot"
+        messages.append({
+            "id":        mid,
+            "speaker":   speaker,
+            "text":      text_val or "",
+            "timestamp": ts,
+        })
+
+    return render_template(
+        "admin/chats.html",
+        # sidebar
+        conversations=sidebar_page,
+        counter=page_number,
+        target="chats",
+        sender_name=sender_id,
+        sender_id=sender_id,
+        # full message list
+        messages=messages,  
+    )
+
+
+@admin.route("/ajax/chats/<sender_id>", methods=["GET"])
+@login_required
+def chats_ajax_detail(sender_id):
+    if not current_user.is_super_admin:
+        return jsonify({"status":0,"msg":"Unauthorized"}), 403
+
+    q       = request.args.get("q","").strip()
+    page    = request.args.get("p",1,type=int)
+    per_page= 50
+    offset  = (page-1)*per_page
+
+    # build search clause
+    where = ["sender_id = :sender_id", "type_name IN ('user','bot')"]
+    params = {"sender_id":sender_id, "limit":per_page, "offset":offset}
+    if q:
+        phrases = q.split("|")
+        conds = []
+        for i,ph in enumerate(phrases):
+            key = f"ph{i}"
+            conds.append(f"(data LIKE :{key} OR intent_name LIKE :{key} OR action_name LIKE :{key})")
+            params[key] = f"%{ph}%"
+        where.append("(" + " OR ".join(conds) + ")")
+
+    where_sql = " AND ".join(where)
+
+    # fetch newest-first by JSON ts (fallback to DB), then reverse in Python
+    sql = text(f"""
+      SELECT
+        id,
+        type_name,
+        (data->>'$.timestamp')+0   AS js_ts,
+        data
+      FROM events
+      WHERE {where_sql}
+      ORDER BY js_ts DESC, id DESC
+      LIMIT :limit OFFSET :offset
+    """)
 
     rows = db.session.execute(sql, params).fetchall()
 
     messages = []
-    for mid, raw_data, event_ts, type_name in rows:
-        ev    = raw_data if isinstance(raw_data, dict) else json.loads(raw_data)
-        tval  = ev.get("timestamp", event_ts)
-        ts    = datetime.fromtimestamp(tval)
-        speaker = "user" if type_name == "user" else "bot"
+    for mid, tname, js_ts, raw in rows:
+        ev = {}
+        try:
+            ev = json.loads(raw or "{}")
+        except:
+            ev["text"] = raw or ""
+        ts_val = js_ts or 0
+        dt = datetime.fromtimestamp(ts_val)
         messages.append({
             "id":        mid,
-            "speaker":   speaker,
-            "text":      ev.get("text",""),
-            "timestamp": ts.strftime("%d.%m.%Y - %H:%M:%S"),
+            "type_name": tname,
+            "channel_type": "webchat",
+            "intent_name":  ev.get("intent") or "kurz",
+            "data":         ev,
+            "timestamp":    dt.strftime("%d.%m.%Y - %H:%M:%S"),
         })
 
-    return jsonify(messages=messages)
+    result = {
+        "status": 1 if messages else 0,
+        "sender": {
+            "name": sender_id,
+            # ... any other sender info you want
+        },
+        "messages": messages,
+        "annotations": [],
+    }
+
+    return jsonify(result)
+
+
+@admin.route("/ajax/chats", methods=["GET"])
+@login_required
+def chats_ajax():
+    if not current_user.is_super_admin:
+        return jsonify({"status": 0, "msg": "Unauthorized"}), 403
+    
+    try:
+        page = request.args.get("p", 1, type=int)
+        search = request.args.get("s", "")
+        c = request.args.get("c", 0, type=int)
+        nlu = request.args.get("nlu", 0, type=int)
+        gdpr = request.args.get("gdpr", 0, type=int)
+        
+        per_page = 20
+        offset = (page - 1) * per_page
+        
+        cache_key = get_cache_key("conversations", page, search, c, nlu, gdpr)
+        cached_result = get_from_cache(cache_key)
+        
+        if cached_result is not None:
+            return jsonify(cached_result)
+        
+        print(f"Loading conversations - page: {page}, search: '{search}'", flush=True)
+        
+        params = {"offset": offset, "limit": per_page}
+        base_query = "FROM events WHERE type_name IN ('user', 'bot')"
+        
+        if search:
+            base_query += " AND MATCH(data, sender_id) AGAINST(:search IN BOOLEAN MODE)"
+            search_term = ' '.join([f'{word}*' for word in search.split()])
+            params["search"] = search_term
+
+        # Optimized query using a subquery to find latest conversations first
+        query = f"""
+            WITH latest_events AS (
+                SELECT sender_id, MAX(timestamp) as last_message_date
+                {base_query}
+                GROUP BY sender_id
+                ORDER BY last_message_date DESC
+                LIMIT :limit OFFSET :offset
+            )
+            SELECT 
+                e.sender_id,
+                (SELECT COUNT(*) FROM events WHERE sender_id = e.sender_id AND type_name IN ('user', 'bot')) as message_count,
+                le.last_message_date,
+                (SELECT data FROM events WHERE sender_id = e.sender_id AND type_name = 'user' ORDER BY timestamp DESC LIMIT 1) as last_user_message
+            FROM events e
+            JOIN latest_events le ON e.sender_id = le.sender_id
+            GROUP BY e.sender_id, le.last_message_date
+            ORDER BY le.last_message_date DESC
+        """
+        
+        conversations = db.session.execute(text(query), params).fetchall()
+        
+        # Get total count with a more optimized query
+        count_query = f"SELECT COUNT(DISTINCT sender_id) as total {base_query}"
+        count_params = {"search": params.get("search")} if search else {}
+        total_count = db.session.execute(text(count_query), count_params).fetchone()
+        
+        conversations2send = []
+        for conversation in conversations:
+            try:
+                # Parse last message data to get text
+                last_message_data = json.loads(conversation.last_user_message) if conversation.last_user_message else {}
+                latest_text = last_message_data.get("text", "") or ""
+                
+                # Format timestamp
+                latest_timestamp = datetime.fromtimestamp(conversation.last_message_date)
+                if datetime.today().date() == latest_timestamp.date():
+                    latest_timestamp = latest_timestamp.strftime("%H:%M:%S")
+                else:
+                    latest_timestamp = latest_timestamp.strftime("%d.%m")
+            except Exception as e:
+                print(f"Error parsing conversation data: {e}", flush=True)
+                latest_text = ""
+                latest_timestamp = ""
+            
+            conversations2send.append({
+                "sender_name": conversation.sender_id,
+                "sender_id": conversation.sender_id,
+                "latest_text": latest_text[:50] + "..." if latest_text and len(latest_text) > 50 else latest_text,
+                "latest_timestamp": latest_timestamp,
+            })
+        
+        print(f"Found {len(conversations2send)} conversations", flush=True)
+        
+        result = {
+            "conversations": conversations2send,
+            "conversations_count": total_count.total if total_count else 0
+        }
+        
+        # Cache the result
+        set_cache(cache_key, result)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"Error in chats_ajax: {e}", flush=True)
+        return jsonify({"status": 0, "msg": str(e), "conversations": [], "conversations_count": 0})
+

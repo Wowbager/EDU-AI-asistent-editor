@@ -1,0 +1,454 @@
+{% extends "base.html" %}
+{% block title %}Zveřejněné nahlášené zprávy{% endblock %}
+
+{% block content %}
+{% include "roleplay/_roleplay_navbar.html" %}
+
+<div class="container mt-4 flagged-messages-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">
+            <i class="fas fa-globe me-2"></i>Zveřejněné nahlášené zprávy
+        </h1>
+        <a href="{{ url_for('roleplay.flagged_messages') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Moje nahlášení
+        </a>
+    </div>
+
+    {% if not published_flags %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>Žádná zveřejněná nahlášení</strong> - Nebyly nalezeny žádné veřejně nahlášené zprávy.
+    </div>
+    {% else %} 
+    <div class="mb-3">
+        <p class="text-muted">
+            <i class="fas fa-eye me-2"></i>
+            Zde můžete prohlížet nahlášené zprávy, které byly zveřejněny komunitou.
+        </p>
+    </div>
+    
+    {% if published_flags %}
+    <div id="published-flagged-messages-accordion">
+        {% for item in published_flags %}
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header flagged-header"
+                 role="button"
+                 data-toggle="collapse"
+                 data-target="#flagged-preview-{{ item.flagged.id }}"
+                 aria-expanded="false"
+                 aria-controls="flagged-preview-{{ item.flagged.id }}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-eye me-2"></i>Náhled
+                    </h5>
+                    <small class="text-muted">
+                        <i class="fas fa-calendar me-1"></i>{{ item.flagged.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+                    </small>
+                </div>
+                <div>
+                    <small class="text-muted">
+                        <i class="fas fa-hashtag me-1"></i>ID sezení: {{ item.flagged.session_id }}
+                    </small><br>
+                    {% if item.team %}
+                    <small>
+                        <i class="fas fa-users me-1"></i>Tým: <span class="badge bg-info text-dark">{{ item.team.name }}</span>
+                    </small><br>
+                    {% endif %}
+                </div>
+                <div class="mt-2 flagged-preview-content">
+                    <span class="text-muted">Náhled: </span>"{{ item.flagged.content|striptags|replace('\\n', ' ')|truncate(80) }}"
+                </div>
+                <div class="mt-2">
+                    <button class="btn btn-sm btn-outline-info view-full-history-btn" data-toggle="modal" data-target="#fullHistoryModal-{{ item.flagged.id }}">
+                        <i class="fas fa-history"></i> Zobrazit celou historii
+                    </button>
+                    {% if current_user.is_authenticated and current_user.id == item.flagged.user_id %}
+                    <div class="btn-group ms-2" role="group">
+                        <button class="btn btn-sm btn-outline-warning edit-message-btn" data-flagged-id="{{ item.flagged.id }}">
+                            <i class="fas fa-edit"></i> Upravit
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary unpublish-btn" data-flagged-id="{{ item.flagged.id }}">
+                            <i class="fas fa-eye-slash"></i> Zrušit zveřejnění
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div id="flagged-preview-{{ item.flagged.id }}" class="collapse">
+                <div class="card-body">                    <div class="summary-display-container alert alert-warning mt-3" {% if not item.flagged.summary %}style="display: none;"{% endif %}>
+                        <h6>Shrnutí:</h6>
+                        {% set clean_summary = item.flagged.summary %}
+                        {% if item.flagged.summary and ('AI analýza: Chyba při analýze:' in item.flagged.summary or 'AI analýza: Úspěšně nachytaný AI asistent' in item.flagged.summary or 'severity' in item.flagged.summary or 'Analýza AI selhala' in item.flagged.summary or 'Chyba při analýze:' in item.flagged.summary) %}
+                            {% set clean_summary = 'Úspěšně nachytaný AI asistent' %}
+                        {% endif %}
+                        <p>{{ clean_summary }}</p>
+                        {% if current_user.is_authenticated and current_user.id == item.flagged.user_id %}
+                        <div class="summary-edit-container mt-2" style="display: none;">
+                            <textarea class="form-control summary-edit-textarea" rows="3" placeholder="Upravte shrnutí...">{{ item.flagged.summary }}</textarea>
+                            <div class="mt-2">
+                                <button class="btn btn-sm btn-success save-summary-btn" data-flagged-id="{{ item.flagged.id }}">
+                                    <i class="fas fa-save"></i> Uložit
+                                </button>
+                                <button class="btn btn-sm btn-secondary cancel-edit-btn">
+                                    <i class="fas fa-times"></i> Zrušit
+                                </button>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <h6>Relevantní kontext:</h6>
+                    <div class="simplified-context">
+                        {% set _context = namespace(pre=None, flagged_hist_msg=None) %}
+                        {% if item.chat_history %}
+                            {% for msg_hist in item.chat_history %}
+                                {% if msg_hist.content == item.flagged.content %}
+                                    {% set _context.flagged_hist_msg = msg_hist %}
+                                    {% if loop.previtem %}
+                                        {% set _context.pre = loop.previtem %}
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+
+                        {% if _context.pre %}
+                            <div class="message mb-2 p-2 border rounded">
+                                <p><strong>{{ _context.pre.role|capitalize if _context.pre.role else 'Kontext' }}:</strong> {{ _context.pre.content }}</p>
+                                {% if _context.pre.timestamp %}
+                                <small class="text-muted">{{ _context.pre.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                                {% endif %}
+                            </div>
+                        {% elif _context.flagged_hist_msg %}
+                             <p><em>Nahlášená zpráva se zdá být první v kontextu nebo nebyla nalezena žádná předchozí zpráva.</em></p>
+                        {% endif %}
+
+                        {% if _context.flagged_hist_msg %}
+                            <div class="message mb-2 p-2 border rounded flagged-message-preview">
+                                <p><strong>{{ _context.flagged_hist_msg.role|capitalize if _context.flagged_hist_msg.role else 'Nahlášeno' }}:</strong> {{ _context.flagged_hist_msg.content }}</p>
+                                {% if _context.flagged_hist_msg.timestamp %}
+                                <small class="text-muted">{{ _context.flagged_hist_msg.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <p><em>Zobrazuje se přímo nahlášený obsah (specifický kontext z historie nebyl identifikován):</em></p>
+                            <div class="message mb-2 p-2 border rounded flagged-message-preview">
+                                 <p><strong>Nahlášený obsah:</strong> {{ item.flagged.content }}</p>
+                                 <small class="text-muted\">Nahlášeno: {{ item.flagged.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                            </div>
+                            {% if not item.chat_history %}
+                            <p><em>Úplná historie chatu není k dispozici pro vytvoření podrobného kontextu.</em></p>
+                            {% endif %}
+                        {% endif %}
+
+                        {% if not _context.pre and not _context.flagged_hist_msg and not item.flagged.content %}
+                            <p>Žádné zprávy k zobrazení.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full History Modal -->
+        <div class="modal fade" id="fullHistoryModal-{{ item.flagged.id }}" tabindex="-1" role="dialog" aria-labelledby="fullHistoryModalLabel-{{ item.flagged.id }}" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="fullHistoryModalLabel-{{ item.flagged.id }}">Celá historie chatu (Sezení: {{ item.flagged.session_id }})</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Zavřít">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        {% for chat_msg in item.chat_history %}
+                        <div class="message-container {% if chat_msg.role == 'user' %}text-right{% else %}text-left{% endif %}">
+                            <div class="message p-2 mb-2 rounded \
+                                        {% if chat_msg.role == 'user' %}bg-primary text-white{% else %}bg-light{% endif %} \
+                                        {% if chat_msg.content == item.flagged.content %}flagged-message{% endif %}" \
+                                 style="display: inline-block; max-width: 70%;">
+                                <strong>{{ chat_msg.role|capitalize }}:</strong>
+                                <p style="white-space: pre-wrap; word-break: break-word;">{{ chat_msg.content }}</p>
+                                <small class="text-muted">{{ chat_msg.timestamp.strftime('%Y-%m-%d %H:%M:%S') if chat_msg.timestamp else 'N/A' }}</small>
+                            </div>
+                        </div>
+                        {% else %}
+                        <p>Pro toto sezení nebyla nalezena žádná historie chatu.</p>
+                        {% endfor %}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Zavřít</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Pagination controls -->
+    {% if pagination and pagination.pages > 1 %}
+    <nav aria-label="Stránkování zveřejněných nahlášených zpráv">
+        <ul class="pagination justify-content-center">
+            {% if pagination.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('roleplay.public_flagged_messages', page=pagination.prev_num) }}">
+                    <i class="fas fa-chevron-left me-1"></i>Předchozí
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">
+                    <i class="fas fa-chevron-left me-1"></i>Předchozí
+                </span>
+            </li>
+            {% endif %}
+
+            {% for p in pagination.iter_pages(left_edge=2, left_current=2, right_current=3, right_edge=2) %}
+            {% if p %}
+            {% if p == pagination.page %}
+            <li class="page-item active" aria-current="page">
+                <span class="page-link">{{ p }}</span>
+            </li>
+            {% else %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('roleplay.public_flagged_messages', page=p) }}">{{ p }}</a>
+            </li>
+            {% endif %}
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+            {% endfor %}
+
+            {% if pagination.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('roleplay.public_flagged_messages', page=pagination.next_num) }}">
+                    Další<i class="fas fa-chevron-right ms-1"></i>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">
+                    Další<i class="fas fa-chevron-right ms-1"></i>
+                </span>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+    {% endif %}
+</div>
+
+<style>
+    .flagged-messages-container {
+        max-height: 85vh; /* Adjust as needed */
+        overflow-y: auto;
+        padding-bottom: 30px; /* Space for pagination or other elements */
+    }
+    .flagged-header {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .flagged-header:hover {
+        background-color: #f0f0f0;
+    }
+    .flagged-preview-content { /* Style for the new preview in header */
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 100%;
+        color: #6c757d;
+        font-style: italic;
+        font-size: 0.9em; 
+    }
+    .simplified-context {
+        background-color: #f8f9fa; /* Light background for context */
+        padding: 10px;
+        border-radius: 5px;
+    }
+    .flagged-message-preview { /* For highlighting the flagged message in the card body's context view */
+        border: 2px solid orange !important;
+        background-color: #fff3e0; 
+    }
+    .flagged-message { /* For highlighting in modal */
+        border: 2px solid red !important;
+        background-color: #ffebeb; 
+    }
+    .modal-body {
+        max-height: 70vh; 
+        overflow-y: auto;
+        position: relative; /* For scroll-to-flagged functionality */
+    }
+    .collapse {
+        transition: height 0.35s ease;
+    }
+    .collapsing {
+        transition: height 0.35s ease !important;
+    }
+    .message-container {
+        margin-bottom: 10px;
+    }
+    .message p {
+        margin-bottom: 0.25rem;
+    }
+    .summary-edit-container {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid #dee2e6;
+    }
+    .edit-controls {
+        opacity: 0.8;
+    }
+    .edit-controls:hover {
+        opacity: 1;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Fix the collapsible items to prevent animation glitches
+    const accordionItems = document.querySelectorAll('#published-flagged-messages-accordion .collapse');
+    accordionItems.forEach(item => {
+        // $(item).collapse('hide'); // Ensure all are initially hidden - Bootstrap should handle this with class="collapse"
+    });
+
+    const flaggedHeaders = document.querySelectorAll('#published-flagged-messages-accordion .card-header');
+    flaggedHeaders.forEach(header => {
+        const targetId = header.getAttribute('data-target');
+        if (targetId) {
+            const targetCollapse = document.querySelector(targetId);
+            if (targetCollapse) {
+                // Bootstrap's default behavior with data-toggle="collapse" handles this.
+                // The 'collapsed' class on header is for styling based on state, not for controlling.
+                // Bootstrap adds/removes 'show' class on the collapse element.
+            }
+        }
+    });
+
+    // Scroll to flagged message in full history modal when shown
+    $('.modal[id^="fullHistoryModal-"]').on('shown.bs.modal', function () {
+        const modalBody = this.querySelector('.modal-body');
+        const flaggedMessage = modalBody.querySelector('.flagged-message');
+        
+        if (flaggedMessage) {
+            const offset = 50; 
+            const modalBodyRect = modalBody.getBoundingClientRect();
+            const flaggedMessageRect = flaggedMessage.getBoundingClientRect();
+            
+            modalBody.scrollTop += (flaggedMessageRect.top - modalBodyRect.top - offset);
+        }
+    });
+
+    // Handle edit message functionality
+    document.querySelectorAll('.edit-message-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const flaggedId = this.getAttribute('data-flagged-id');
+            const card = this.closest('.card');
+            const summaryContainer = card.querySelector('.summary-display-container');
+            const editContainer = card.querySelector('.summary-edit-container');
+            
+            if (summaryContainer && editContainer) {
+                summaryContainer.style.display = 'none';
+                editContainer.style.display = 'block';
+            }
+        });
+    });
+
+    // Handle cancel edit
+    document.querySelectorAll('.cancel-edit-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const card = this.closest('.card');
+            const summaryContainer = card.querySelector('.summary-display-container');
+            const editContainer = card.querySelector('.summary-edit-container');
+            
+            if (summaryContainer && editContainer) {
+                summaryContainer.style.display = 'block';
+                editContainer.style.display = 'none';
+            }
+        });
+    });
+
+    // Handle save summary
+    document.querySelectorAll('.save-summary-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const flaggedId = this.getAttribute('data-flagged-id');
+            const card = this.closest('.card');
+            const textarea = card.querySelector('.summary-edit-textarea');
+            const newSummary = textarea.value.trim();
+            
+            // Send AJAX request to update summary
+            fetch(`{{ url_for('roleplay.update_flagged_summary', flagged_id='FLAGGED_ID') }}`.replace('FLAGGED_ID', flaggedId), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || ''
+                },
+                body: JSON.stringify({
+                    summary: newSummary
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update the display
+                    const summaryContainer = card.querySelector('.summary-display-container');
+                    const summaryText = summaryContainer.querySelector('p');
+                    const editContainer = card.querySelector('.summary-edit-container');
+                    
+                    summaryText.textContent = newSummary;
+                    summaryContainer.style.display = 'block';
+                    editContainer.style.display = 'none';
+                    
+                    // Show success message
+                    alert('Shrnutí bylo úspěšně aktualizováno.');
+                } else {
+                    alert('Chyba při aktualizaci shrnutí: ' + (data.error || 'Neznámá chyba'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Došlo k chybě při ukládání.');
+            });
+        });
+    });
+
+    // Handle unpublish functionality
+    document.querySelectorAll('.unpublish-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const flaggedId = this.getAttribute('data-flagged-id');
+            
+            if (confirm('Opravdu chcete zrušit zveřejnění této zprávy? Zpráva se stane soukromou a nebude viditelná pro ostatní uživatele.')) {
+                fetch(`{{ url_for('roleplay.unpublish_flagged', flagged_id='FLAGGED_ID') }}`.replace('FLAGGED_ID', flaggedId), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || ''
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Remove the card from view
+                        this.closest('.card').remove();
+                        
+                        // Check if no more messages, show info message
+                        const remainingCards = document.querySelectorAll('#published-flagged-messages-accordion .card');
+                        if (remainingCards.length === 0) {
+                            location.reload(); // Reload to show "no messages" state
+                        }
+                    } else {
+                        alert('Chyba při rušení zveřejnění: ' + (data.error || 'Neznámá chyba'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Došlo k chybě při rušení zveřejnění.');
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

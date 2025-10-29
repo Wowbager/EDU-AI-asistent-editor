@@ -37,7 +37,7 @@ def index():
 
 @public.route("/course/<hash>")
 def share_webchat(hash):
-    try:
+    try: 
         # course_id = cipher_suite.decrypt(hash.encode()).decode()
         course_id = hasher.decode(hash)[0]
         course = Course.query.filter_by(id=course_id).first()
@@ -46,93 +46,92 @@ def share_webchat(hash):
     except:
         return "course not found"
 
-    return (
-        """
-	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<script>
-	localStorage.removeItem("chat_session");
-	!function(){let e=document.createElement("script"),t=document.head||document.getElementsByTagName("head")[0];e.src="https://cdn.jsdelivr.net/npm/rasa-webchat@1.0.1/lib/index.js",e.async=!0,e.onload=(()=>{window.WebChat.default({
-		customData:{current_url:window.location.href,custom_course:"""
-        + str(course_id)
-        + """},
-		initPayload: "/get_started",
-		socketUrl:'"""
-        + os.environ.get("RASA_URL", "FILL_RASA_URL")
-        + """',
-		title: "Kurz: """
-        + str(course.name)
-        + """",
-		inputTextFieldHint: "",
-		customMessageDelay: (message) => {
-			return 250;
-		}
-	},null)
-	}),t.insertBefore(e,t.firstChild)}();</script>
-	<style>
-	@media (max-width: 576px) {.rw-replies .rw-reply {font-size: 14px;}}
-	body {
-		background-image: url('"""
-        + os.environ.get("PROJECT_URL", "FILL_PROJECT_URL")
-        + """/static/media/img/chat-background.jpg');
-	}
-	@media screen and (min-width: 800px) {
-		.rw-messages-container {
-			height: 550px !important;
-			max-height: 65vh !important;
-		}
-		.rw-widget-container .rw-conversation-container {
-			width: 450px !important;
-		}
-  	}
-	.rw-conversation-container .rw-image-frame {
-		height: auto !important;
-	}
+    # Use f-string for cleaner formatting
+    return f"""
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <script>
+    localStorage.removeItem("chat_session");
+    !function(){{
+        let e=document.createElement("script"),t=document.head||document.getElementsByTagName("head")[0];
+        e.src="https://cdn.jsdelivr.net/npm/rasa-webchat@1.0.1/lib/index.js";
+        e.async=!0;
+        e.onload=(()=>{{ // This function runs after the webchat script is loaded
+            window.WebChat.default({{
+                customData:{{current_url:window.location.href,custom_course:{str(course_id)}}},
+                initPayload: "/get_started",
+                socketUrl:'{os.environ.get("RASA_URL", "FILL_RASA_URL")}',
+                title: "{str(course.name)}",
+                inputTextFieldHint: "",
+                customMessageDelay: (message) => {{
+                    return 750;
+                }}
+            }},null);
 
-	.rw-conversation-container .rw-send .rw-send-icon {
-  		fill: #135afe !important;
-	}
+            // Add logic to open the chat widget after initialization
+            setTimeout(function() {{
+                const widgetContainer = document.querySelector(".rw-widget-container");
+                // Check if widget exists and is not already open
+                if (widgetContainer && ![...widgetContainer.classList].includes("rw-chat-open")) {{
+                    const launcher = document.querySelector('.rw-launcher');
+                    if (launcher) {{
+                        launcher.click();
+                    }}
+                }}
+            }}, 500); // Small delay to ensure widget DOM is ready
+        }});
+        t.insertBefore(e,t.firstChild)
+    }}();
+    </script>
+    <style>
+    @media (max-width: 576px) {{.rw-replies .rw-reply {{font-size: 14px;}}}}
+    body {{
+        background-image: url('{os.environ.get("PROJECT_URL", "FILL_PROJECT_URL")}/static/media/img/chat-background.jpg');
+    }}
+    @media screen and (min-width: 800px) {{
+        .rw-messages-container {{
+            height: 550px !important;
+            max-height: 65vh !important;
+        }}
+        .rw-widget-container .rw-conversation-container {{
+            width: 450px !important;
+        }}
+      }}
+    .rw-conversation-container .rw-image-frame {{
+        height: auto !important;
+    }}
 
-	.rw-messages-container {
-		background-color: transparent;
-		background-image: url('"""
-        + os.environ.get("PROJECT_URL", "FILL_PROJECT_URL")
-        + """/static/uploads/back-tabs-250.png');
-	}
+    .rw-conversation-container .rw-send .rw-send-icon {{
+          fill: #135afe !important;
+    }}
 
-	.rw-conversation-container .rw-response {
-		background-color: white !important;
-	}
+    .rw-messages-container {{
+        background-color: #eeeeee !important;
+        background-image: url('{os.environ.get("PROJECT_URL", "FILL_PROJECT_URL")}/static/uploads/back-tabs-250.png');
+    }}
 
-	.rw-conversation-container .rw-new-message {
-		background-color: white;
-	}
+    .rw-conversation-container .rw-response {{
+        background-color: white !important;
+        line-height: 1.5 !important;
+    }}
 
-	.rw-conversation-container .rw-sender {
-		background-color: white;
-	}
+    .rw-conversation-container .rw-new-message {{
+        background-color: white;
+    }}
 
-	.rw-conversation-container .rw-send {
-		background: white;
-	}
-	</style>
-	<script>
-	window.onload = function(){
-   	setTimeout(function() {
-		
-		if (![...document.querySelector(".rw-widget-container").classList].includes("rw-chat-open")) {
-			document.querySelector('.rw-launcher').click();
-		}
-		
-   	}, 500);
-	};
-	</script>
-	"""
-    )
+    .rw-conversation-container .rw-sender {{
+        background-color: white;
+    }}
+
+    .rw-conversation-container .rw-send {{
+        background: white;
+    }}
+    </style>
+    <!-- Removed the old window.onload script block -->
+    """
 
 
 @public.route("/register", methods=["GET", "POST"])
 def register():
-
     if os.getenv("ALLOW_REGISTER") != "1":
         flash("Registrace není povolena!", "warning")
         return redirect(url_for("public.login"))
@@ -154,7 +153,6 @@ def register():
 
 @public.route("/reset-password", methods=["GET", "POST"])
 def reset_password():
-
     form = ResetPasswordRequestForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
@@ -182,7 +180,7 @@ def reset_password():
 @public.route("/reset-password/<token>", methods=["GET", "POST"])
 def reset_password_token(token):
     if current_user.is_authenticated:
-        return redirect(url_for("public.choose_company"))
+        return redirect(url_for("admin.courses"))
 
     user = User.verify_reset_password_token(token)
     if not user:
@@ -200,7 +198,7 @@ def reset_password_token(token):
 @public.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("admin.courses"))
+        return redirect(url_for("roleplay.roleplay_home"))
 
     form = LoginForm()
     if form.validate_on_submit():
@@ -211,10 +209,21 @@ def login():
 
         if user.check_password(form.password.data):
             login_user(user)
-            next = request.args.get("next")
-            if next == None or not next[0] == "/":
-                next = url_for("public.index")
-            return redirect(next)
+            next_page = request.args.get("next")
+            if next_page:
+                # Check if it's a full URL (with domain)
+                if '://' in next_page:
+                    # Extract just the path from the URL
+                    from urllib.parse import urlparse
+                    next_path = urlparse(next_page).path
+                    if next_path and next_path.startswith('/'):
+                        return redirect(next_path)
+                # Or if it's just a path
+                elif next_page.startswith('/'):
+                    return redirect(next_page)
+            
+            # If no valid next parameter, go to courses
+            return redirect(url_for("roleplay.roleplay_home"))
         else:
             flash("Špatné heslo!", "danger")
 
