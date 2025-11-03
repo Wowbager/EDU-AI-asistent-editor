@@ -1,91 +1,87 @@
 {% extends "base.html" %}
 
-{% block title %}AI Roleplay Chat{% endblock %}
-
+{% block title %}EDU AI Chat - Roleplay{% endblock %}
 
 {% block content %}
-{% include "roleplay/_roleplay_navbar.html" %}
-{% include "roleplay/styles.html" %}
-<div class="container-fluid mt-md-4" id="roleplay-container">
-    <div class="row">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h1 class="mb-0">
-                    <i class="fas fa-theater-masks me-2"></i>AI Roleplay Chat
-                </h1>
-                {% if current_user.is_authenticated %}
-                <div class="btn-group" role="group">
-                    <a href="{{ url_for('roleplay.flagged_messages') }}" class="btn btn-outline-secondary">
-                        <i class="fas fa-flag"></i> Moje úlovky
-                    </a>
-                    {% if user_teams and user_teams|length > 0 %}
-                    <a href="{{ url_for('roleplay.teams') }}" class="btn btn-outline-info">
-                        <i class="fas fa-users"></i> Týmy
-                    </a>
-                    {% else %}
-                    <a href="{{ url_for('roleplay.new_team') }}" class="btn btn-outline-success">
-                        <i class="fas fa-plus"></i> Vytvořit tým
-                    </a>
-                    {% endif %}
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <div class="card mb-4 shadow-sm" id="setup-container">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">
-                <i class="fas fa-play-circle me-2"></i>Začněte nový roleplay
-            </h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-8">
-                    <div class="form-group mb-3">
-                        <label for="subject-input" class="form-label fw-bold">
-                            <i class="fas fa-book me-2"></i>Předmět:
-                        </label>
-                        <input type="text" class="form-control" id="subject-input" placeholder="Zadej předmět (např. fyzika, dějepis)" maxlength="100">
-                        <small class="form-text text-muted">Zadejte oblast, ve které chcete mít roleplay konverzaci.</small>
-                    </div>
-                </div>
-                <div class="col-md-4 d-flex align-items-end">
-                    <div class="w-100">
-                        <button class="btn btn-primary w-100 mb-2" id="fetch-roles-btn">
-                            <i class="fas fa-search"></i> Načíst role
-                        </button>
-                        <button class="btn btn-outline-secondary w-100" id="direct-custom-chat-btn">
-                            <i class="fas fa-magic"></i> Vlastní chat
-                        </button>
-                    </div>
-                </div>
-            </div>
+<body>
+    <div class="layout">
+        <div class="content">
+            {% include "roleplay/_roleplay_navbar.html" %}
             
-            <div id="roles-container" style="display: none;" class="mt-4">
-                <div class="card bg-light">
-                    <div class="card-header">
-                        <h6 class="mb-0">
-                            <i class="fas fa-user-tag me-2"></i>Dostupné role
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-group mb-3">
-                            <label for="role-select" class="form-label">Vyber roli:</label>
-                            <select class="form-control" id="role-select"></select>
+            <div class="sidebar-group">
+                <div id="roleplay-sidebar" class="sidebar active">
+                    <header>
+                        <div class="d-flex align-items-center">
+                            <button class="btn btn-outline-light mobile-navigation-button mr-3 d-xl-none d-inline">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                                </svg>
+                            </button>
+                            <span class="sidebar-title">AI Roleplay Chat</span>
                         </div>
-                        <button class="btn btn-success w-100" id="start-btn">
-                            <i class="fas fa-rocket"></i> Začít chat s vybranou rolí
-                        </button>
+                    </header>
+                    
+                    <div class="sidebar-body">
+                        <div class="card mb-3 shadow-sm">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-magic me-2"></i>Vlastní roleplay chat
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group mb-3">
+                                    <label for="subject-input" class="form-label fw-bold">
+                                        <i class="fas fa-book me-2"></i>Předmět / Oblast:
+                                    </label>
+                                    <input type="text" class="form-control" id="subject-input" placeholder="Např. fyzika, historie, literatura" maxlength="100">
+                                    <small class="form-text text-muted">V jaké oblasti se bude konverzace odehrávat?</small>
+                                </div>
+
+                                <div class="form-group mb-3">
+                                    <label for="custom-role-name" class="form-label fw-bold">
+                                        <i class="fas fa-user me-2"></i>Název role:
+                                    </label>
+                                    <input type="text" class="form-control" id="custom-role-name" placeholder="Např. Albert Einstein, Sherlock Holmes">
+                                    <small class="form-text text-muted">Kdo bude AI v konverzaci představovat?</small>
+                                </div>
+                                
+                                <div class="form-group mb-3">
+                                    <label for="custom-role-brief" class="form-label fw-bold">
+                                        <i class="fas fa-info-circle me-2"></i>Stručný popis:
+                                    </label>
+                                    <input type="text" class="form-control" id="custom-role-brief" placeholder="Např. Fyzik, detektiv">
+                                    <small class="form-text text-muted">Krátký popis role (2-3 slova)</small>
+                                </div>
+                                
+                                <div class="form-group mb-3">
+                                    <label for="custom-instructions" class="form-label fw-bold">
+                                        <i class="fas fa-edit me-2"></i>Instrukce pro AI:
+                                    </label>
+                                    <textarea class="form-control" id="custom-instructions" rows="4" placeholder="Např. Jsi Albert Einstein. Představ se, mluv o fyzice, buď trochu excentrický..."></textarea>
+                                    <small id="custom-char-counter" class="form-text text-muted">0/1500 znaků</small>
+                                </div>
+                                
+                                <button class="btn btn-primary w-100 mb-2" id="start-custom-chat-btn-sidebar">
+                                    <i class="fas fa-rocket"></i> Spustit vlastní chat
+                                </button>
+                                
+                                <button class="btn btn-outline-primary w-100" data-toggle="modal" data-target="#aiRolesModal">
+                                    <i class="fas fa-robot"></i> Nebo nechat AI vygenerovat role
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {% include "roleplay/chat.html" %}
         </div>
     </div>
-
-    
-    {% include "roleplay/chat.html" %}
-</div>
+</body>
 
 <script>
     // Global variables
@@ -96,13 +92,16 @@
 
     // DOM elements
     const subjectInput = document.getElementById('subject-input');
+    const aiSubjectInput = document.getElementById('ai-subject-input');
     const fetchRolesBtn = document.getElementById('fetch-roles-btn');
     const roleSelect = document.getElementById('role-select');
     const startBtn = document.getElementById('start-btn');
-    const setupContainer = document.getElementById('setup-container');
     const rolesContainer = document.getElementById('roles-container');
     const chatContainer = document.getElementById('chat-container');    
     const chatLog = document.getElementById('chat-log');
+    const chatBodyContent = document.getElementById('chat-body-content');
+    const chatPlaceholder = document.getElementById('chat-placeholder');
+    const chatFooterContent = document.getElementById('chat-footer-content');
     const msgInput = document.getElementById('msg-input');
     const sendBtn = document.getElementById('send-btn');
     const clearBtn = document.getElementById('clear-btn');
@@ -110,11 +109,9 @@
     const charCounter = document.getElementById('char-counter');
     const newChatBtn = document.getElementById('new-chat-btn');
     const roleDisplay = document.getElementById('role-display');
-    const directCustomChatBtn = document.getElementById('direct-custom-chat-btn');
-    const directCustomChatBtnHeader = document.getElementById('direct-custom-chat-btn-header');
     const customInstructions = document.getElementById('custom-instructions');
     const customCharCounter = document.getElementById('custom-char-counter');
-    const startCustomChatBtn = document.getElementById('start-custom-chat-btn');
+    const startCustomChatBtnSidebar = document.getElementById('start-custom-chat-btn-sidebar');
     const customRoleName = document.getElementById('custom-role-name');
     const customRoleBrief = document.getElementById('custom-role-brief');
     const flagSummaryInput = document.getElementById('flag-summary-input');
@@ -140,24 +137,23 @@
         console.error("Element s ID 'fetch-roles-btn' nebyl nalezen. Posluchač událostí pro načítání rolí nebyl připojen.");
     }
     
-    // Bind Enter key to subject input for fetching roles
-    subjectInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            fetchRoles();
-        }
-    });
+    // Bind Enter key to AI subject input for fetching roles
+    if (aiSubjectInput) {
+        aiSubjectInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                fetchRoles();
+            }
+        });
+    }
     
     startBtn.addEventListener('click', startChat);
     sendBtn.addEventListener('click', sendMessage);
     newChatBtn.addEventListener('click', resetToRoleSelection);
-    directCustomChatBtn.addEventListener('click', () => {
-        $('#customChatModal').modal('show');
-    });
-    if (directCustomChatBtnHeader) {
-        directCustomChatBtnHeader.addEventListener('click', () => {
-            $('#customChatModal').modal('show');
-        });
+    
+    // Bind custom chat button in sidebar
+    if (startCustomChatBtnSidebar) {
+        startCustomChatBtnSidebar.addEventListener('click', startCustomChat);
     }
     
     // Character counter for custom instructions textarea
@@ -180,21 +176,14 @@
             customInstructions.style.borderColor = '';
         }
     });
-      // Start custom chat button event listener
-    startCustomChatBtn.addEventListener('click', startCustomChat);
-    
+      
     // Function to start custom chat
     async function startCustomChat() {
-        const instructions = customInstructions.value.trim();
         const roleName = customRoleName.value.trim();
         const roleBrief = customRoleBrief.value.trim();
-        const subject = document.getElementById('custom-role-subject').value.trim();
-
-        // Validate inputs
-        if (!instructions) {
-            alert('Prosím, zadejte vlastní instrukce.');
-            return;
-        }
+        const subject = subjectInput.value.trim();
+        const instructions = customInstructions.value.trim();
+        
         if (!roleName) {
             alert('Prosím, zadejte název vlastní role.');
             return;
@@ -215,7 +204,7 @@
         }
 
         // Disable buttons to prevent double-click
-        startCustomChatBtn.disabled = true;
+        startCustomChatBtnSidebar.disabled = true;
 
         try {
             // Generate a unique ID for the custom role
@@ -230,9 +219,11 @@
             assistantMessageCount = 0;
             currentSessionId = null;
 
-            // Show chat container and hide setup container
-            setupContainer.style.display = 'none';
-            chatContainer.style.display = 'flex';
+            // Show chat interface and hide placeholder
+            chatContainer.classList.add('open'); // Add 'open' class for mobile
+            document.getElementById('chat-placeholder').style.display = 'none';
+            document.getElementById('chat-body-content').style.display = 'flex';
+            document.getElementById('chat-footer-content').style.display = 'block';
             msgInput.style.height = '50px';
             msgInput.focus();
             $('#customChatModal').modal('hide');
@@ -274,7 +265,7 @@
             addSystemMessage(`Chyba při zahájení vlastního chatu: ${error.message}`);
         } finally {
             // Re-enable buttons and inputs
-            startCustomChatBtn.disabled = false;
+            startCustomChatBtnSidebar.disabled = false;
             msgInput.disabled = false;
             sendBtn.disabled = false;
         }
@@ -299,11 +290,13 @@
         sendBtn.disabled = false;
         
         // Re-enable custom chat button
-        startCustomChatBtn.disabled = false;
+        startCustomChatBtnSidebar.disabled = false;
         
-        // Hide chat container and show setup container
-        chatContainer.style.display = 'none';
-        setupContainer.style.display = 'block';
+        // Hide chat interface and show placeholder
+        chatContainer.classList.remove('open'); // Remove 'open' class to allow sidebar to show on mobile
+        document.getElementById('chat-body-content').style.display = 'none';
+        document.getElementById('chat-footer-content').style.display = 'none';
+        document.getElementById('chat-placeholder').style.display = 'flex';
         
         // Clear the subject input to start fresh
         subjectInput.value = '';
@@ -349,13 +342,12 @@
       // Functions
     async function fetchRoles() {
         console.log("fetchRoles function called");
-        const subjectInput = document.getElementById('subject-input'); // Define subjectInput inside the function
-        if (!subjectInput) {
-            console.error("Element s ID 'subject-input' nebyl nalezen uvnitř fetchRoles.");
+        if (!aiSubjectInput) {
+            console.error("Element s ID 'ai-subject-input' nebyl nalezen uvnitř fetchRoles.");
             alert("Chyba: Vstupní pole pro předmět nebylo nalezeno.");
             return;
         }
-        const subject = subjectInput.value.trim();
+        const subject = aiSubjectInput.value.trim();
         if (!subject) {
             alert('Prosím, zadej předmět');
             return;
@@ -408,7 +400,7 @@
             alert(`Nepodařilo se načíst role: ${error.message}`);
         } finally {
             fetchRolesBtn.disabled = false;
-            fetchRolesBtn.textContent = 'Načíst role';
+            fetchRolesBtn.innerHTML = '<i class="fas fa-robot"></i> Nechat AI vygenerovat role';
         }
     }
         // Helper function to create and append a single message bubble
@@ -494,20 +486,26 @@
         currentRoleId = selectedOption.value;
         const roleTitle = selectedOption.text;
         const roleBrief = selectedOption.dataset.brief;
-        const subject = subjectInput.value.trim(); // Now uses locally defined subjectInput
+        const subject = aiSubjectInput.value.trim(); // Use AI subject input from modal
 
         if (!subject) {
             alert('Prosím, zadejte téma nebo předmět.');
             return;
         }
 
+        // Close the modal
+        $('#aiRolesModal').modal('hide');
+
         roleDisplay.innerHTML = `<strong>Role:</strong> ${roleTitle} | <strong>Předmět:</strong> ${subject}`;
         chatLog.innerHTML = '';
         assistantMessageCount = 0;
         currentSessionId = null;
 
-        setupContainer.style.display = 'none';
-        chatContainer.style.display = 'flex';
+        // Show chat interface and hide placeholder
+        chatContainer.classList.add('open'); // Add 'open' class for mobile
+        document.getElementById('chat-placeholder').style.display = 'none';
+        document.getElementById('chat-body-content').style.display = 'flex';
+        document.getElementById('chat-footer-content').style.display = 'block';
         msgInput.style.height = '50px'; // ADD THIS LINE to set fixed height
         msgInput.focus();
         

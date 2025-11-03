@@ -4,26 +4,37 @@ import traceback
 import openai
 import redis
 import pickle
+import os
 
 from app import app, db
 from app.models import ChatMessage, ChatSession
+from .config import (
+    COMPETITION_RUNNING,
+    CHAT_TIMEOUT,
+    CHAT_TEMPERATURE,
+    CHAT_MAX_TOKENS,
+    ROLE_GEN_MAX_TOKENS,
+    CHAT_HISTORY_TTL
+)
+
+# Configure OpenAI to use Groq API
+openai.api_key = os.environ.get("GROQ_KEY")
+openai.api_base = "https://api.groq.com/openai/v1"
+
+# Shared Redis client for roleplay module
+redis_client = redis.Redis(
+    host=app.config.get('REDIS_HOST', 'redis'),
+    port=app.config.get('REDIS_PORT', 6379),
+    db=app.config.get('REDIS_DB', 0),
+    decode_responses=False  # Important for pickle
+)
 
 try:
-    # Initialize Redis client specifically for chat_utils
-    redis_client_chat_utils = redis.Redis(
-        host=app.config.get('REDIS_HOST', 'redis'),
-        port=app.config.get('REDIS_PORT', 6379),
-        db=app.config.get('REDIS_DB', 0),
-        decode_responses=False # Important for pickle
-    )
-    redis_client_chat_utils.ping()
-    print("Chat Utils Redis connection successful.")
+    redis_client.ping()
+    print("Roleplay Redis connection successful.")
 except Exception as e:
-    print(f"Chat Utils Redis connection failed: {str(e)}")
-    redis_client_chat_utils = None
-
-# Add competition status check
-COMPETITION_RUNNING = True  # Should match views.py
+    print(f"Roleplay Redis connection failed: {str(e)}")
+    redis_client = None
 
 def count_assistant_messages(chat_history):
     """Count the number of assistant messages in the chat history"""
@@ -31,11 +42,14 @@ def count_assistant_messages(chat_history):
         return 0
     return sum(1 for msg in chat_history if msg.get('role') == 'assistant')
 
-def call_openai_chat_completion(model, messages, request_timeout=600):
+def call_openai_chat_completion(model, messages, request_timeout=None):
     """
     Calls the OpenAI ChatCompletion API and returns the response content.
     Handles API errors.
     """
+    if request_timeout is None:
+        request_timeout = CHAT_TIMEOUT
+        
     if not COMPETITION_RUNNING:
         raise Exception("Soutěž již skončila. AI chat není k dispozici.")
     
@@ -58,6 +72,7 @@ def call_openai_chat_completion(model, messages, request_timeout=600):
                 "Za žádných okolností nepoužívejte sprostá slova ani urážky. "
                 "Nepoužívejte fráze jako 'jsem jazykový model' nebo 'nemám přístup k internetu'. "
                 "Snažte se odpovídat jako daný člověk, ber v potaz co zná a jak by měl odpovídat."
+                "nezapomeň, že odpovídáš do chatu, takže se vyhni formálním pozdravům a rozloučením."
             ),
         }        
         messages_to_send = [general_info] + messages + [general_info]
@@ -66,13 +81,13 @@ def call_openai_chat_completion(model, messages, request_timeout=600):
     
     try:
         # Use higher max_tokens for role generation to ensure complete JSON
-        max_tokens_to_use = 800 if is_role_generation else 400
+        max_tokens_to_use = ROLE_GEN_MAX_TOKENS if is_role_generation else CHAT_MAX_TOKENS
         
         response = openai.ChatCompletion.create(
             model=model,
             messages=messages_to_send,
             request_timeout=request_timeout,
-            temperature=1,
+            temperature=CHAT_TEMPERATURE,
             max_tokens=max_tokens_to_use,
         )
         return response.choices[0].message.content
@@ -90,24 +105,28 @@ def get_chat_history(session_id):
     """
     try:
         # Try Redis first for performance
-        if redis_client_chat_utils:
-            chat_history_raw = redis_client_chat_utils.get(f"chat_history:{session_id}")
+        if redis_client:
+            chat_history_raw = redis_client.get(f"chat_history:{session_id}")
             if chat_history_raw:
                 return pickle.loads(chat_history_raw)
         
         # If not in Redis or Redis failed, check the database
         db_messages = ChatMessage.query.filter_by(session_id=session_id).order_by(ChatMessage.message_index).all()
         if db_messages:
-            # Convert to the expected format, ensuring timestamp is included
+            # Convert to the expected format, ensuring timestamp is converted to string
             chat_history = [
-                {"role": msg.role, "content": msg.content, "timestamp": msg.timestamp} 
+                {
+                    "role": msg.role, 
+                    "content": msg.content, 
+                    "timestamp": msg.timestamp.isoformat() if msg.timestamp else None
+                } 
                 for msg in db_messages
             ]
             
             # Repopulate Redis for faster future access
-            if redis_client_chat_utils:
+            if redis_client:
                 try:
-                    redis_client_chat_utils.set(
+                    redis_client.set(
                         f"chat_history:{session_id}", 
                         pickle.dumps(chat_history),
                         ex=86400 * 14  # Expire after 14 days
@@ -133,11 +152,11 @@ def save_chat_history(session_id, chat_history):
     
     try:
         # Save to Redis for quick access (with expiration)
-        if redis_client_chat_utils:
-            redis_client_chat_utils.set(
+        if redis_client:
+            redis_client.set(
                 f"chat_history:{session_id}", 
                 pickle.dumps(chat_history),
-                ex=86400 * 14  # Expire after 14 days
+                ex=CHAT_HISTORY_TTL
             )
         
         # Save to database for long-term storage
@@ -193,4 +212,59 @@ def get_role_by_id(role_id):
     except Exception as e:
         print(f"Error retrieving role in chat_utils: {str(e)}")
         return None
+
+
+def prepare_messages_for_ai(chat_history):
+    """
+    Prepare chat history for OpenAI API by filtering messages.
+    
+    Filters out:
+    - All but the first system message
+    - The first user message (which contains custom instructions)
+    - Timestamp fields (OpenAI doesn't need them)
+    
+    Args:
+        chat_history: List of message dictionaries with 'role' and 'content'
+    
+    Returns:
+        Filtered list of messages ready for OpenAI API
+    """
+    if not chat_history:
+        return []
+    
+    filtered_messages = []
+    system_message_added = False
+    user_message_count = 0
+    
+    for msg in chat_history:
+        role = msg.get('role')
+        
+        # Keep only the first system message
+        if role == 'system':
+            if not system_message_added:
+                # Only include role and content, not timestamp
+                filtered_messages.append({
+                    "role": msg.get('role'),
+                    "content": msg.get('content')
+                })
+                system_message_added = True
+            # Skip any additional system messages
+            continue
+        
+        # Skip the first user message (custom instructions)
+        if role == 'user':
+            user_message_count += 1
+            if user_message_count == 1:
+                continue  # Skip first user message
+        
+        # Include all other messages (subsequent user messages and all assistant messages)
+        # Only include role and content, not timestamp
+        if role in ['user', 'assistant']:
+            filtered_messages.append({
+                "role": msg.get('role'),
+                "content": msg.get('content')
+            })
+    
+    return filtered_messages
+
 

@@ -1,5 +1,6 @@
-pymysql
-celery
-redis
-flower
-phonenumbers
+pymysql==1.0.3
+celery==5.2.7
+redis==3.5.3
+flower==1.2.0
+phonenumbers==8.13.11
+openai==0.27.8

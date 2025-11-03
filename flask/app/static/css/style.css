@@ -1086,3 +1086,41 @@ a.choosecompany:hover {
 	justify-content: space-between;
 	margin-top: 5px;
 }
+
+/* Ensure modals are not blurred and have proper z-index */
+/* Modal backdrop should be behind modal content */
+.modal-backdrop {
+	z-index: 1040 !important;
+}
+
+/* Modal container should be above backdrop */
+.modal {
+	z-index: 1050 !important;
+}
+
+/* Modal content should be even higher */
+.modal-dialog {
+	z-index: 1051 !important;
+	position: relative;
+}
+
+.modal-content {
+	z-index: 1052 !important;
+	position: relative;
+}
+
+/* Disable blur effect when modal is open (on all screen sizes) */
+body.modal-open .layout {
+	-webkit-filter: none !important;
+	-moz-filter: none !important;
+	-o-filter: none !important;
+	-ms-filter: none !important;
+	filter: none !important;
+}
+
+/* On mobile, ensure navigation overlay is below modal */
+@media (max-width: 1200px) {
+	body.navigation-open:after {
+		z-index: 1020 !important;
+	}
+}

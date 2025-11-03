@@ -1,44 +1,54 @@
 import json
-import uuid
 import traceback
+import uuid
+import os
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash
-import openai
 from flask_login import current_user, login_required
 from app import app, db
-from app.models import ChatSession, FlaggedResponse, Team, User, ChatMessage, Event # Ensure ChatMessage is imported
-import redis
-from datetime import datetime, timedelta # Added timedelta
+from app.models import ChatSession, FlaggedResponse, Team, User, ChatMessage, TeamInvitation
+from datetime import datetime, timedelta
+import openai
 
-# Import utility functions from chat_utils
+# Configure OpenAI to use Groq API
+openai.api_key = os.environ.get("GROQ_KEY")
+openai.api_base = "https://api.groq.com/openai/v1"
+
+# Import utility functions and config from within roleplay module
 from .chat_utils import (
-    count_assistant_messages,
-    call_openai_chat_completion,
     get_chat_history,
     save_chat_history,
-    get_role_by_id
+    get_role_by_id,
+    prepare_messages_for_ai,
+    count_assistant_messages,
+    call_openai_chat_completion
 )
-
-# Maximum number of AI responses allowed in a chat session
-MAX_AI_RESPONSES = 10
-# Maximum user message length in characters
-MAX_MESSAGE_LENGTH = 1000
-# Maximum length for custom instructions
-MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1500
-
-COMPETITION_RUNNING = True  # Set to True when the competition is active
+from .config import (
+    COMPETITION_RUNNING,
+    MAX_AI_RESPONSES,
+    MAX_MESSAGE_LENGTH,
+    MAX_CUSTOM_INSTRUCTIONS_LENGTH,
+    CHAT_MODEL,
+    ROLE_GENERATION_MODEL,
+    ROLE_GENERATION_TIMEOUT
+)
 
 roleplay = Blueprint("roleplay", __name__)
 
-try:
-    redis_client = redis.Redis(
-        host=app.config.get('REDIS_HOST', 'redis'),
-        port=app.config.get('REDIS_PORT', 6379),
-        db=app.config.get('REDIS_DB', 0)
-    )
-    redis_client.ping()
-except Exception as e:
-    print(f"Redis connection failed: {str(e)}")
-    redis_client = None
+@roleplay.route("/", methods=["GET"])
+@login_required
+def roleplay_home():
+    """
+    Render the roleplay chat interface
+    
+    Returns:
+        The rendered roleplay template
+    """
+    if not COMPETITION_RUNNING:
+        flash("Soutěž již skončila. Chat není k dispozici.", "info")
+        return redirect(url_for("public.index"))
+    
+    user_teams = current_user.teams  # Get user's teams
+    return render_template("roleplay/index.html", user_teams=user_teams)
 
 @roleplay.route("/roles", methods=["GET"])
 @login_required
@@ -82,7 +92,6 @@ def get_roles():
     
     try:
         # Compose the system prompt
-        # Simplified system_prompt for get_roles
         system_prompt = """Jste AI pro generování vzdělávacích rolí pro soutěž #NachytejAI. Pro daný předmět vygenerujte PŘESNĚ PĚT rolí bohatých na historické detaily.
 
 KRITICKÉ: Odpověď MUSÍ být POUZE platný JSON. Žádný text před ani po JSON!
@@ -120,9 +129,9 @@ PŘÍKLAD pro 'Starověký Řím':
         ]
         
         content = call_openai_chat_completion(
-            model="gpt-4.1", 
+            model=ROLE_GENERATION_MODEL, 
             messages=messages_for_openai,
-            request_timeout=600
+            request_timeout=ROLE_GENERATION_TIMEOUT
         )
         
         print(f"Raw OpenAI response for subject '{subject}': {repr(content)}")
@@ -151,18 +160,6 @@ PŘÍKLAD pro 'Starověký Řím':
                     print(f"Successfully parsed JSON on second attempt for subject: {subject}")
                 except json.JSONDecodeError:
                     print(f"Second JSON parse attempt failed for subject: {subject}")
-            
-            # Attempt 3: Look for individual role objects and reconstruct array
-            if roles_data is None:
-                role_pattern = r'\{[^{}]*"id"[^{}]*"title"[^{}]*"brief"[^{}]*\}'
-                role_matches = re.findall(role_pattern, content_cleaned, re.DOTALL)
-                if role_matches:
-                    try:
-                        reconstructed_json = '[' + ','.join(role_matches) + ']'
-                        roles_data = json.loads(reconstructed_json)
-                        print(f"Successfully reconstructed JSON from {len(role_matches)} role objects for subject: {subject}")
-                    except json.JSONDecodeError:
-                        print(f"Failed to reconstruct JSON from role objects for subject: {subject}")
         
         # If all JSON parsing attempts failed, return fallback roles
         if roles_data is None:
@@ -172,27 +169,27 @@ PŘÍKLAD pro 'Starověký Řím':
                     {
                         "id": f"fallback_role_1_{subject.lower().replace(' ', '_')}",
                         "title": f"Expert na {subject}",
-                        "brief": f"Zkušený specialista v oblasti {subject} s hlubokými znalostmi a praktickými zkušenostmi."
+                        "brief": f"Zkušený specialista v oblasti {subject} s hlubokými znalostmi."
                     },
                     {
                         "id": f"fallback_role_2_{subject.lower().replace(' ', '_')}",
-                        "title": f"Výzkumník v {subject}",
-                        "brief": f"Vědecký pracovník zaměřený na výzkum v oblasti {subject}, publikuje odborné studie."
+                        "title": f"Učitel {subject}",
+                        "brief": f"Pedagog s dlouholetými zkušenostmi ve výuce {subject}."
                     },
                     {
                         "id": f"fallback_role_3_{subject.lower().replace(' ', '_')}",
-                        "title": f"Učitel {subject}",
-                        "brief": f"Pedagog s dlouholetými zkušenostmi ve výuce {subject} na různých úrovních vzdělávání."
+                        "title": f"Výzkumník v {subject}",
+                        "brief": f"Vědecký pracovník zaměřený na výzkum v oblasti {subject}."
                     },
                     {
                         "id": f"fallback_role_4_{subject.lower().replace(' ', '_')}",
                         "title": f"Praktik v {subject}",
-                        "brief": f"Praktický odborník využívající znalosti {subject} v každodenní profesní praxi."
+                        "brief": f"Praktický odborník využívající znalosti {subject}."
                     },
                     {
                         "id": f"fallback_role_5_{subject.lower().replace(' ', '_')}",
                         "title": f"Student {subject}",
-                        "brief": f"Pokročilý student oboru {subject} s velkým zájmem a základními praktickými zkušenostmi."
+                        "brief": f"Pokročilý student oboru {subject} s velkým zájmem."
                     }
                 ]
             }), 200
@@ -200,8 +197,7 @@ PŘÍKLAD pro 'Starověký Řím':
         # Validate the structure of roles_data
         if not isinstance(roles_data, list):
             print(f"OpenAI response for roles was not a list for subject: {subject}. Response: {content}")
-            # If the prompt asked for an empty list for invalid subjects, this is okay.
-            if roles_data == []: # Explicitly empty list as per prompt for bad subject
+            if roles_data == []:
                 return jsonify({"roles": []}), 200
             return jsonify({"error": "Odpověď od AI pro generování rolí neměla očekávaný formát."}), 500
 
@@ -219,7 +215,6 @@ PŘÍKLAD pro 'Starověký Řím':
             else:
                 print(f"Malformed role object from OpenAI: {role_candidate} for subject: {subject}")
         
-        # If after validation, no roles, and it wasn't an intentional empty list for bad subject
         if not validated_roles and not (isinstance(roles_data, list) and not roles_data):
             print(f"No valid roles were extracted from OpenAI response for subject: {subject}. Response: {content}")
             return jsonify({"error": "AI nevrátila žádné validní role."}), 500
@@ -230,7 +225,6 @@ PŘÍKLAD pro 'Starověký Řím':
         print(f"OpenAI API error during get_roles: {str(e)}")
         return jsonify({"error": f"Chyba API OpenAI: {str(e)}"}), 503
     except Exception as e:
-        # Handle any other exceptions with more detailed logging
         print(f"Unexpected error during get_roles for subject '{subject}': {str(e)}")
         traceback.print_exc()
         return jsonify({"error": f"Chyba při generování rolí: {str(e)}"}), 500
@@ -270,7 +264,7 @@ def chat():
     # Check if this is a first message (likely custom instructions)
     is_first_message = session_id is None
     
-    # Apply appropriate length limit based on whether it's custom instructions or regular message
+    # Apply appropriate length limit
     max_length = MAX_CUSTOM_INSTRUCTIONS_LENGTH if is_first_message else MAX_MESSAGE_LENGTH
     
     # Check message length
@@ -286,13 +280,11 @@ def chat():
             
             current_role_title = None
             current_role_brief = None
-            # Ensure subject is fetched from the request data for the first message
             current_subject = data.get("subject")
-            if not current_subject: # Fallback if subject somehow not provided
+            if not current_subject:
                 current_subject = "nespecifikováno"
 
             if role_id.startswith('custom-'):
-                # For custom roles, title and brief are sent in the first message request
                 current_role_title = data.get("role_title", "Vlastní role")
                 current_role_brief = data.get("role_brief", "Definovaná uživatelem")
             else:
@@ -302,7 +294,7 @@ def chat():
                 current_role_title = role_details['title']
                 current_role_brief = role_details['brief']
             
-            # Enhanced system prompt - this is the main change
+            # Enhanced system prompt
             system_prompt_content = (
                 f"Jsi AI asistent v roli '{current_role_title}' ({current_role_brief}) pro soutěž #NachytejAI. "
                 f"Specializuješ se na předmět '{current_subject}'. "
@@ -323,7 +315,7 @@ def chat():
                 {"role": "user", "content": message}
             ]
             
-            # For AI call on first message, use only system prompt (without user instructions)
+            # For AI call on first message, use only system prompt
             chat_history_for_ai = [
                 {"role": "system", "content": system_prompt_content}
             ]
@@ -343,24 +335,8 @@ def chat():
                 "content": message
             })
             
-            # For AI calls, filter out the first user message (instructions) and system messages
-            # Keep only system prompt and actual conversation
-            chat_history_for_ai = []
-            found_system = False
-            first_user_skipped = False
-            
-            for msg in chat_history:
-                if msg.get('role') == 'system' and not found_system:
-                    # Keep only the first system message (the actual prompt)
-                    chat_history_for_ai.append(msg)
-                    found_system = True
-                elif msg.get('role') == 'user' and not first_user_skipped:
-                    # Skip the first user message (initial instructions)
-                    first_user_skipped = True
-                    continue
-                elif msg.get('role') in ['user', 'assistant']:
-                    # Keep all other user and assistant messages
-                    chat_history_for_ai.append(msg)
+            # Filter messages for AI
+            chat_history_for_ai = prepare_messages_for_ai(chat_history)
         
         try:
             # Check if chat has reached the maximum number of AI responses
@@ -368,12 +344,9 @@ def chat():
             if num_assistant_messages >= MAX_AI_RESPONSES:
                 return jsonify({"error": "Překročen maximální počet odpovědí AI v této relaci."}), 400
                 
-            # Determine model for chat completion
-            model_for_chat = "gpt-4.1-nano"
-
             # Use the filtered chat history for AI call
             assistant_reply_content = call_openai_chat_completion(
-                model=model_for_chat,
+                model=CHAT_MODEL,
                 messages=chat_history_for_ai
             )
 
@@ -440,6 +413,388 @@ def get_chat_session(session_id):
         traceback.print_exc()
         return jsonify({"error": f"Chyba při načítání relace chatu: {str(e)}"}), 500
 
+@roleplay.route("/conversations", methods=["GET"])
+def conversations():
+    """
+    Display all user's chat conversations with the ability to view details and flag/unflag messages.
+    
+    Query Parameters:
+        page: The page number (default: 1)
+        per_page: Number of items per page (default: 20)
+        show_flagged_only: If 'true', show only conversations with flagged messages (default: 'false')
+        show_public_flags: If 'true', show all publicly flagged conversations (default: 'false')
+    
+    Returns:
+        The rendered conversations template
+    """
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    show_flagged_only = request.args.get('show_flagged_only', 'false').lower() == 'true'
+    show_public_flags = request.args.get('show_public_flags', 'false').lower() == 'true'
+    
+    # If not showing public flags, require login
+    if not show_public_flags and not current_user.is_authenticated:
+        return redirect(url_for('public.login'))
+    
+    # If showing public flags, get all public flagged conversations (not just current user's)
+    if show_public_flags:
+        # Get all public flagged messages with their session IDs
+        public_flags = FlaggedResponse.query.filter_by(is_public=True).order_by(FlaggedResponse.timestamp.desc()).all()
+        
+        # Group by session_id
+        sessions_dict = {}
+        for flag in public_flags:
+            if flag.session_id not in sessions_dict:
+                sessions_dict[flag.session_id] = {
+                    'session_id': flag.session_id,
+                    'flags': [],
+                    'team_id': flag.team_id
+                }
+            sessions_dict[flag.session_id]['flags'].append(flag)
+        
+        # Build sessions data for public flags
+        sessions_data = []
+        for session_id, data in sessions_dict.items():
+            # Get chat history
+            chat_history = get_chat_history(session_id)
+            
+            # If no Redis history, get from database
+            if not chat_history:
+                db_messages = ChatMessage.query.filter_by(session_id=session_id).order_by(ChatMessage.timestamp).all()
+                chat_history = [{'role': msg.role, 'content': msg.content, 'timestamp': msg.timestamp.isoformat() if msg.timestamp else None} for msg in db_messages]
+            
+            # Get team info
+            team = Team.query.get(data['team_id']) if data['team_id'] else None
+            
+            # Extract role info
+            role_title = "Konverzace"
+            role_brief = ""
+            if chat_history and len(chat_history) > 0:
+                first_msg = chat_history[0]
+                if first_msg.get('role') == 'system':
+                    content = first_msg.get('content', '')
+                    if 'v roli' in content:
+                        import re
+                        match = re.search(r"v roli '([^']+)'", content)
+                        if match:
+                            role_title = match.group(1)
+                        match = re.search(r"'([^']+)' \(([^)]+)\)", content)
+                        if match:
+                            role_title = match.group(1)
+                            role_brief = match.group(2)
+            
+            # Create flagged content list with summaries
+            flagged_messages_list = []
+            for f in data['flags']:
+                flagged_messages_list.append({
+                    'id': f.id,
+                    'content': f.content,
+                    'summary': f.summary,
+                    'timestamp': f.timestamp.isoformat() if f.timestamp else None
+                })
+            
+            sessions_data.append({
+                'session': {
+                    'id': session_id,
+                    'role_title': role_title,
+                    'role_brief': role_brief,
+                    'created_at': data['flags'][0].timestamp.isoformat() if data['flags'] else None
+                },
+                'message_count': len(chat_history),
+                'chat_history': chat_history,
+                'flagged_messages': flagged_messages_list,
+                'flagged_content_set': [f.content for f in data['flags']],
+                'team': {'name': team.name} if team else None,
+                'is_public': True
+            })
+        
+        return render_template(
+            "roleplay/conversations.html",
+            sessions_data=sessions_data,
+            pagination=None,
+            show_flagged_only=False,
+            show_public_flags=True,
+            user_teams=current_user.teams if current_user.is_authenticated else []
+        )
+    
+    # Get all chat sessions for the current user, ordered by most recent
+    sessions_query = ChatSession.query.filter_by(user_id=current_user.id).order_by(ChatSession.created_at.desc())
+    
+    # If show_flagged_only is true, filter to only sessions with flagged messages
+    if show_flagged_only:
+        # Get session IDs that have flagged messages for this user
+        flagged_session_ids = db.session.query(FlaggedResponse.session_id).filter_by(
+            user_id=current_user.id
+        ).distinct().all()
+        flagged_session_ids = [sid[0] for sid in flagged_session_ids]
+        
+        if flagged_session_ids:
+            sessions_query = sessions_query.filter(ChatSession.id.in_(flagged_session_ids))
+        else:
+            # No flagged sessions, return empty result
+            sessions_query = ChatSession.query.filter_by(id='non_existent_id')
+    
+    # Paginate the results
+    pagination = sessions_query.paginate(page=page, per_page=per_page, error_out=False)
+    sessions = pagination.items
+    
+    # For each session, get the message count and chat history
+    sessions_data = []
+    for session in sessions:
+        # Try to get chat history from Redis first, then from database
+        chat_history = get_chat_history(session.id)
+        
+        # If no Redis history, get from database
+        if not chat_history:
+            db_messages = ChatMessage.query.filter_by(session_id=session.id).order_by(ChatMessage.timestamp).all()
+            chat_history = [{'role': msg.role, 'content': msg.content, 'timestamp': msg.timestamp.isoformat() if msg.timestamp else None} for msg in db_messages]
+        
+        # Get flagged messages for this session
+        flagged_messages = FlaggedResponse.query.filter_by(
+            session_id=session.id,
+            user_id=current_user.id
+        ).all()
+        
+        # Create a list of flagged content for quick lookup (convert set to list for JSON serialization)
+        flagged_content_list = [f.content for f in flagged_messages]
+        
+        # Extract role title and brief from chat history or use defaults
+        role_title = "Konverzace"
+        role_brief = ""
+        
+        if chat_history and len(chat_history) > 0:
+            # Check if first message is system message with role info
+            first_msg = chat_history[0]
+            if first_msg.get('role') == 'system':
+                content = first_msg.get('content', '')
+                # Try to extract role title from system message
+                if 'v roli' in content:
+                    # Extract role title from pattern "v roli 'Title'"
+                    import re
+                    match = re.search(r"v roli '([^']+)'", content)
+                    if match:
+                        role_title = match.group(1)
+                    # Extract brief if available
+                    match = re.search(r"'([^']+)' \(([^)]+)\)", content)
+                    if match:
+                        role_title = match.group(1)
+                        role_brief = match.group(2)
+        
+        sessions_data.append({
+            'session': {
+                'id': session.id,
+                'role_title': role_title,
+                'role_brief': role_brief,
+                'created_at': session.created_at.isoformat() if session.created_at else None
+            },
+            'message_count': len(chat_history),
+            'chat_history': chat_history,
+            'flagged_messages': [{'id': f.id, 'content': f.content, 'summary': f.summary, 'is_public': f.is_public, 'team_id': f.team_id} for f in flagged_messages],
+            'flagged_content_set': flagged_content_list
+        })
+    
+    return render_template(
+        "roleplay/conversations.html",
+        sessions_data=sessions_data,
+        pagination=pagination,
+        show_flagged_only=show_flagged_only,
+        user_teams=current_user.teams
+    )
+
+@roleplay.route("/teams", methods=["GET"])
+@login_required
+def teams():
+    """
+    List all teams and provide functionality for the user to create or join a team
+    
+    Returns:
+        Rendered template showing teams
+    """
+    if not COMPETITION_RUNNING:
+        flash("Soutěž již skončila. Správa týmů není k dispozici.", "warning")
+        return redirect(url_for("public.index"))
+    
+    # Get user's teams
+    user_teams_db = current_user.teams
+    app.logger.info(f"--- Initial user_teams_db (current_user.teams): {list(user_teams_db)} ---")
+    
+    # Get all teams
+    all_teams_db = Team.query.order_by(Team.name).all()
+    app.logger.info(f"--- Initial all_teams_db: {list(all_teams_db)} ---")
+
+    def process_team_description(team_list):
+        processed_teams = []
+        app.logger.info(f"--- process_team_description called with team_list: {team_list} ---")
+        if not team_list:
+            app.logger.warning("--- process_team_description received an empty or None team_list ---")
+            return []
+            
+        for team_obj in team_list:
+            # Initialize attributes
+            team_obj.creator_id = None
+            team_obj.display_description = "Tento tým nemá popis."
+
+            if team_obj.description:
+                try:
+                    description_data = json.loads(team_obj.description)
+                    if isinstance(description_data, dict):
+                        team_obj.display_description = description_data.get("original_description", team_obj.description)
+                        
+                        parsed_creator_id = description_data.get("creator_id")
+                        if parsed_creator_id is not None:
+                            try:
+                                team_obj.creator_id = int(parsed_creator_id)
+                            except (ValueError, TypeError):
+                                app.logger.warning(f"Team '{team_obj.name}': creator_id '{parsed_creator_id}' is not a valid integer. Kept as None.")
+                                pass 
+                    else:
+                        team_obj.display_description = team_obj.description
+                except (json.JSONDecodeError, TypeError):
+                    app.logger.warning(f"Team '{team_obj.name}': Failed to parse description JSON. Raw description: {team_obj.description}")
+                    team_obj.display_description = team_obj.description if team_obj.description else "Chyba při čtení popisu."
+            
+            processed_teams.append(team_obj)
+        app.logger.info(f"--- process_team_description finished, processed_teams: {processed_teams} ---")
+        return processed_teams
+    
+    def serialize_team(team_obj):
+        """Serialize team object for JSON"""
+        # Check if current user is a member of this team
+        is_member = current_user in team_obj.members.all()
+        is_creator = team_obj.creator_id == current_user.id
+        
+        members_list = []
+        for member in team_obj.members.all():
+            member_data = {
+                'id': member.id
+            }
+            
+            # Only show email/name if current user is a member of the team
+            if is_member:
+                member_data['email'] = member.email
+                member_data['name'] = member.name if hasattr(member, 'name') and member.name else member.email
+            else:
+                # Show anonymized data for non-members
+                member_data['email'] = None
+                member_data['name'] = f'Člen {member.id}'
+            
+            members_list.append(member_data)
+        
+        # Get pending invitations count (only for creator)
+        pending_invites_count = 0
+        pending_invites = []
+        if is_creator:
+            pending_invitations = TeamInvitation.query.filter_by(
+                team_id=team_obj.id,
+                status='pending'
+            ).all()
+            pending_invites_count = len(pending_invitations)
+            pending_invites = [
+                {
+                    'id': inv.id,
+                    'invitee_email': inv.invitee_email,
+                    'created_at': inv.created_at.isoformat() if inv.created_at else None
+                }
+                for inv in pending_invitations
+            ]
+        
+        # Get flagged responses count (only for team members)
+        flagged_responses_count = 0
+        if is_member:
+            flagged_responses_count = FlaggedResponse.query.filter_by(team_id=team_obj.id).count()
+        
+        return {
+            'id': team_obj.id,
+            'name': team_obj.name,
+            'description': team_obj.description,
+            'display_description': team_obj.display_description if hasattr(team_obj, 'display_description') else 'Tento tým nemá popis.',
+            'created_at': team_obj.created_at.isoformat() if team_obj.created_at else None,
+            'creator_id': team_obj.creator_id,
+            'members': members_list,
+            'member_count': len(members_list),
+            'is_member': is_member,
+            'is_creator': is_creator,
+            'pending_invites_count': pending_invites_count,
+            'pending_invites': pending_invites,
+            'flagged_responses_count': flagged_responses_count
+        }
+
+    # Process teams
+    user_teams_processed = process_team_description(list(user_teams_db)) 
+    all_teams_processed = process_team_description(list(all_teams_db))
+
+    # Debug logging
+    app.logger.info("--- Debugging user_teams_processed in /teams route ---")
+    if not user_teams_processed:
+        app.logger.warning("--- user_teams_processed is empty or None. ---")
+    for team_item in user_teams_processed:
+        app.logger.info(f"Team Name: {team_item.name}, Team ID: {team_item.id}, Creator ID: {team_item.creator_id}")
+        app.logger.info(f"Current User ID: {current_user.id}")
+    app.logger.info("--- End Debugging /teams route ---")
+    
+    # Serialize teams for JavaScript
+    user_teams_json = [serialize_team(team) for team in user_teams_processed]
+    all_teams_json = [serialize_team(team) for team in all_teams_processed]
+    
+    # Get pending invitations for current user
+    pending_invitations_count = TeamInvitation.query.filter_by(
+        invitee_email=current_user.email,
+        status='pending'
+    ).count()
+    
+    return render_template(
+        "roleplay/teams.html",
+        user_teams=user_teams_processed,
+        all_teams=all_teams_processed,
+        user_teams_json=user_teams_json,
+        all_teams_json=all_teams_json,
+        pending_invitations_count=pending_invitations_count
+    )
+
+@roleplay.route("/admin-dashboard", methods=["GET"])
+@login_required
+def admin_dashboard():
+    """
+    Admin page to view all chats, teams, and flagged messages.
+    Only accessible to super admin users.
+    """
+    if not current_user.is_super_admin:
+        flash("Přístup odepřen: Nemáte oprávnění k zobrazení této stránky.", "danger")
+        return redirect(url_for("roleplay.roleplay_home"))
+
+    # Fetching data for summary cards
+    total_users = User.query.count()
+    time_24_hours_ago = datetime.utcnow() - timedelta(days=1)
+    chats_last_24h = ChatSession.query.filter(ChatSession.created_at >= time_24_hours_ago).count()
+    flags_last_24h = FlaggedResponse.query.filter(FlaggedResponse.timestamp >= time_24_hours_ago).count()
+
+    # Pagination parameters
+    page_chats = request.args.get('page_chats', 1, type=int)
+    page_teams = request.args.get('page_teams', 1, type=int)
+    page_flags = request.args.get('page_flags', 1, type=int)
+    PER_PAGE = 12
+
+    # Paginated queries
+    all_chats_pagination = ChatSession.query.order_by(ChatSession.created_at.desc()).paginate(
+        page=page_chats, per_page=PER_PAGE, error_out=False
+    )
+    all_teams_pagination = Team.query.order_by(Team.name).paginate(
+        page=page_teams, per_page=PER_PAGE, error_out=False
+    )
+    all_flagged_messages_pagination = FlaggedResponse.query.order_by(FlaggedResponse.timestamp.desc()).paginate(
+        page=page_flags, per_page=PER_PAGE, error_out=False
+    )
+
+    return render_template(
+        "roleplay/admin_dashboard.html",
+        total_users=total_users,
+        chats_last_24h=chats_last_24h,
+        flags_last_24h=flags_last_24h,
+        all_chats_pagination=all_chats_pagination,
+        all_teams_pagination=all_teams_pagination,
+        all_flagged_messages_pagination=all_flagged_messages_pagination
+    )
+
 @roleplay.route("/flag", methods=["POST"])
 @login_required
 def flag_response():
@@ -449,10 +804,10 @@ def flag_response():
     Request JSON:
         {
             "session_id": UUID,
-            "message_index": integer (optional) - The index of the assistant message to flag,
-            "team_id": integer (optional) - The ID of the team that is flagging this message,
-            "is_public": boolean (optional) - Whether this flag should be publicly visible,
-            "summary": string (optional) - A brief summary of why the message is flagged
+            "flagged_content": string,
+            "summary": string (optional),
+            "team_id": integer (optional),
+            "is_public": boolean (optional)
         }
     
     Returns:
@@ -467,164 +822,49 @@ def flag_response():
         return jsonify({"error": "Chybějící tělo JSON v požadavku."}), 400
     
     session_id = data.get("session_id")
-    message_index = data.get("message_index")
+    flagged_content = data.get("flagged_content")
     summary = data.get("summary")
-
-    # Make sure message_index is an integer if provided
-    try:
-        if message_index is not None:
-            message_index = int(message_index)
-    except (ValueError, TypeError) as e:
-        return jsonify({"error": "Neplatný formát message_index."}), 400
-    
-    # Get team_id and is_public if provided
     team_id = data.get("team_id")
     is_public = data.get("is_public", False)
     
     if not session_id:
         return jsonify({"error": "Chybějící session_id."}), 400
     
+    if not flagged_content:
+        return jsonify({"error": "Chybějící flagged_content."}), 400
+    
     try:
         chat_session = ChatSession.query.get(session_id)
         if not chat_session:
             return jsonify({"error": "Relace chatu nebyla nalezena."}), 404
 
-        # Get chat history for AI analysis
-        chat_history = get_chat_history(session_id)
-        flagged_content = data.get("flagged_content", "Obsah není k dispozici")
-        
-        # AI Content Analysis for inappropriate content
-        ai_analysis_result = None
-        severity_level = "normal"
-        
-        try:
-            # Prepare content for AI analysis
-            analysis_prompt = """Analyzujte následující konverzaci a označenou zprávu z AI asistenta na nevhodný obsah. 
+        # Validate team membership if team_id is provided
+        if team_id:
+            team = Team.query.get(team_id)
+            if not team or current_user not in team.members.all():
+                return jsonify({"error": "Nemáte oprávnění přiřadit označení k tomuto týmu."}), 403
 
-KRITÉRIA PRO VYSOCE NEVHODNÝ OBSAH:
-- Explicitní sexuální obsah
-- Násilí nebo podněcování k násilí
-- Diskriminace nebo nenávistné projevy
-- Nezákonné aktivity
-- Škodlivé nebo nebezpečné pokyny
-- Urážlivý nebo dehonestující obsah
-
-Odpovězte ve formátu JSON:
-{
-    "severity": "low" | "medium" | "high" | "critical",
-    "inappropriate_categories": ["kategorie1", "kategorie2"],
-    "explanation": "stručné vysvětlení v češtině",
-    "requires_immediate_attention": true/false
-}
-
-OZNAČENÁ ZPRÁVA:
-{flagged_content}
-
-CELÁ KONVERZACE:
-{chat_context}"""
-
-            # Include complete chat history for context
-            chat_context = ""
-            if chat_history and len(chat_history) > 0:
-                for i, msg in enumerate(chat_history):
-                    if isinstance(msg, dict):
-                        role = msg.get('role', 'unknown')
-                        content = msg.get('content', '')
-                        # Skip system messages for cleaner analysis
-                        if role != 'system':
-                            chat_context += f"{i}. {role}: {content}\n\n"
-            
-            analysis_messages = [
-                {
-                    "role": "system",
-                    "content": "Jste AI specializovaný na detekci nevhodného obsahu v českých konverzacích. Analyzujte objektivně a přesně."
-                },
-                {
-                    "role": "user", 
-                    "content": analysis_prompt.format(
-                        flagged_content=flagged_content,
-                        chat_context=chat_context
-                    )
-                }
-            ]
-            
-            ai_analysis_response = call_openai_chat_completion(
-                model="gpt-4.1-mini",
-                messages=analysis_messages,
-                request_timeout=30
-            )
-              # Parse AI analysis
-            try:
-                # Clean the AI response to handle formatting issues
-                cleaned_response = ai_analysis_response.strip()
-                ai_analysis_result = json.loads(cleaned_response)
-                severity_level = ai_analysis_result.get("severity", "normal")
-                
-                # Auto-mark as requiring attention if high severity
-                if severity_level in ["high", "critical"]:
-                    is_public = False  # Keep highly inappropriate content private initially
-                    
-            except json.JSONDecodeError:
-                print(f"Failed to parse AI analysis JSON: {ai_analysis_response}", flush=True)
-                ai_analysis_result = {
-                    "severity": "unknown",
-                    "explanation": "Úspěšně nachytaný AI asistent",
-                    "requires_immediate_attention": False
-                }
-            except Exception as ai_error:
-                print(f"AI content analysis failed: {str(ai_error)}")
-                ai_analysis_result = {
-                    "severity": "unknown", 
-                    "explanation": "Úspěšně nachytaný AI asistent",
-                    "requires_immediate_attention": False
-                }
-        except:
-            print("AI content analysis failed, using fallback values.", flush=True)
-            ai_analysis_result = {
-                "severity": "unknown", 
-                "explanation": "Úspěšně nachytaný AI asistent",
-                "requires_immediate_attention": False
-            }
+        # Create new flagged response
         flagged_response_id = str(uuid.uuid4())
         new_flag = FlaggedResponse(
             id=flagged_response_id,
             user_id=current_user.id,
             session_id=session_id,
             content=flagged_content,
-            summary=summary,
+            summary=summary or "Úspěšně nachytaný AI asistent",
             team_id=team_id,
             is_public=is_public,
             timestamp=datetime.utcnow()
         )
         
-        # Store AI analysis result in the summary if no user summary provided
-        if not summary and ai_analysis_result:
-            analysis_summary = f"AI analýza: {ai_analysis_result.get('explanation', 'Bez vysvětlení')}"
-            if ai_analysis_result.get('inappropriate_categories'):
-                analysis_summary += f" | Kategorie: {', '.join(ai_analysis_result['inappropriate_categories'])}"
-            new_flag.summary = analysis_summary
-        
         db.session.add(new_flag)
         db.session.commit()
         
-        response_data = {
+        return jsonify({
             "success": True, 
             "flagged_response_id": flagged_response_id,
             "message": "Odpověď byla úspěšně označena."
-        }
-        
-        # Include AI analysis in response if available
-        if ai_analysis_result:
-            response_data["ai_analysis"] = {
-                "severity": severity_level,
-                "requires_attention": ai_analysis_result.get("requires_immediate_attention", False)
-            }
-            
-            # Add warning for high severity content
-            if severity_level in ["high", "critical"]:
-                response_data["warning"] = "Detekován vysoce nevhodný obsah - automaticky označeno pro okamžitou pozornost."
-        
-        return jsonify(response_data), 201
+        }), 201
         
     except Exception as e:
         db.session.rollback()
@@ -632,204 +872,44 @@ CELÁ KONVERZACE:
         traceback.print_exc()
         return jsonify({"error": f"Chyba při označování odpovědi: {str(e)}"}), 500
 
-@roleplay.route("/flagged", methods=["GET"])
+@roleplay.route("/unflag_message", methods=["POST"])
 @login_required
-def flagged_messages():   
+def unflag_message():
     """
-    Display all flagged messages with their context.
+    Remove a flagged message from the user's flagged collection.
     
-    Query Parameters:
-        page: The page number (default: 1)
-        per_page: Number of items per page (default: 12)
-        view_all: If set to 'true' and user is admin, show all flagged messages
-        team_id: If provided, show flagged messages for this team
+    JSON Body:
+        session_id: The session ID
+        content: The content of the message to unflag
     
     Returns:
-        The rendered flagged messages template
+        JSON response with success status
     """
-    if not COMPETITION_RUNNING:
-        flash("Soutěž již skončila. Přístup k označeným zprávám není k dispozici.", "warning")
-        return redirect(url_for("roleplay.public_flagged_messages"))
+    data = request.get_json()
+    session_id = data.get('session_id')
+    content = data.get('content')
     
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 12, type=int)
-    view_all = request.args.get('view_all', 'false').lower() == 'true'
-    team_id = request.args.get('team_id', None, type=int)
+    if not session_id or not content:
+        return jsonify({'success': False, 'error': 'Missing session_id or content'}), 400
     
-    is_admin = hasattr(current_user, 'email') and current_user.email.endswith('@admin.com')
+    # Find and delete the flagged response
+    flagged = FlaggedResponse.query.filter_by(
+        session_id=session_id,
+        user_id=current_user.id,
+        content=content
+    ).first()
     
-    # Get user's teams
-    user_teams_query = Team.query.join(Team.members).filter(User.id == current_user.id)
-    if not is_admin: # Non-admins only see their own teams
-        user_teams = user_teams_query.all()
-    else: # Admins can see all teams if they choose to filter
-        user_teams = Team.query.order_by(Team.name).all()
-
-    # Base query for flagged responses
-    query = FlaggedResponse.query.order_by(FlaggedResponse.timestamp.desc())
-
-    if not is_admin:
-        # Non-admins see their own flags + flags from their teams (if no specific team is selected)
-        # or flags for a specific team they are part of.
-        if team_id:
-            query = query.filter(FlaggedResponse.team_id == team_id, Team.members.any(User.id == current_user.id)) # Ensure user is part of the team
-        else:
-            # User's own flags OR flags from any of their teams
-            user_team_ids = [t.id for t in user_teams_query.all()]
-            query = query.filter(
-                db.or_(
-                    FlaggedResponse.user_id == current_user.id,
-                    FlaggedResponse.team_id.in_(user_team_ids)
-                )
-            )
-    else: # Admin view
-        if not view_all: # Admin not viewing all, so filter to their teams or personal
-            user_team_ids = [t.id for t in user_teams_query.all()] # Potentially all teams if admin made them members of all
-            query = query.filter(
-                db.or_(
-                    FlaggedResponse.user_id == current_user.id,
-                    FlaggedResponse.team_id.in_(user_team_ids) # Only if admin wants to see team-specific and is member
-                )
-            )
-        # If view_all is true, admin sees all flags (no additional team_id based filters on query needed here, unless team_id is also specified)
-        if team_id: # Admin can also filter by a specific team
-            query = query.filter(FlaggedResponse.team_id == team_id)
-        
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-    flagged_items = pagination.items
-    
-    flagged_data = []
-    for item in flagged_items:
-        team_obj = Team.query.get(item.team_id) if item.team_id else None
-        
-        full_chat_history = []
-        last_two_messages = []
-        chat_session = ChatSession.query.get(item.session_id)
-        if chat_session:
-            # ChatMessages are ordered by message_index by default in the relationship or query them ordered
-            messages = ChatMessage.query.filter_by(session_id=item.session_id).order_by(ChatMessage.message_index).all()
-            # Filter out system messages
-            filtered_messages = [msg for msg in messages if getattr(msg, 'role', '') != 'system']
-            full_chat_history = filtered_messages
-            last_two_messages = filtered_messages[-2:] if len(filtered_messages) >= 2 else filtered_messages
-            
-        flagged_data.append({
-            "flagged": item,
-            "team": team_obj,
-            "user": item.user,
-            "full_chat_history": full_chat_history,
-            "last_two_messages": last_two_messages
-        })
-        
-    return render_template(
-        "roleplay/flagged.html", 
-        flagged_data=flagged_data, 
-        pagination=pagination,
-        current_team_id=team_id,
-        user_teams=user_teams,
-        is_admin=is_admin,
-        view_all=view_all
-    )
-
-@roleplay.route("/flagged/<flagged_id>/edit", methods=["POST"])
-@login_required
-def edit_flagged_response(flagged_id):
-    """
-    Edit the summary and public status of a flagged response.
-    
-    Path Parameters:
-        flagged_id: The ID of the flagged response to edit.
-        
-    Form Data:
-        summary: The new summary for the flagged response.
-        is_public: 'true' or 'false' string to set the public status.
-        
-    Returns:
-        JSON response indicating success or failure.
-    """
-    if not COMPETITION_RUNNING:
-        return jsonify({"success": False, "message": "Soutěž již skončila. Úprava označení není k dispozici."}), 403
+    if not flagged:
+        return jsonify({'success': False, 'error': 'Flagged message not found'}), 404
     
     try:
-        flagged_response = FlaggedResponse.query.get(flagged_id)
-        
-        if not flagged_response:
-            return jsonify({"success": False, "message": "Označení nebylo nalezeno."}), 404 # Added return
-            
-        # Check permissions: user who flagged or an admin
-        is_admin = hasattr(current_user, 'email') and current_user.email.endswith('@admin.com')
-        if flagged_response.user_id != current_user.id and not is_admin:
-            return jsonify({"success": False, "message": "Nemáte oprávnění k úpravě tohoto označení."}), 403 # Added return
-            
-        new_summary = request.form.get("summary")
-        is_public_str = request.form.get("is_public")
-
-        if new_summary is None: # Check if summary is part of the form at all
-            return jsonify({"success": False, "message": "Chybí shrnutí (summary)."}), 400
-            
-        if not isinstance(new_summary, str) or len(new_summary.strip()) == 0:
-            return jsonify({"success": False, "message": "Shrnutí nesmí být prázdné."}), 400 # Added return
-
-        flagged_response.summary = new_summary.strip()
-        
-        # Update is_public status
-        if is_public_str is not None:
-            flagged_response.is_public = is_public_str.lower() == 'true'
-        
+        db.session.delete(flagged)
         db.session.commit()
-        
-        return jsonify({"success": True, "message": "Označení bylo úspěšně aktualizováno."})
-        
+        return jsonify({'success': True, 'message': 'Message unflagged successfully'})
     except Exception as e:
         db.session.rollback()
-        print(f"Error editing flagged response: {str(e)}")
-        traceback.print_exc()
-        return jsonify({"success": False, "message": f"Chyba při úpravě označení: {str(e)}"}), 500 # Added return
-
-
-@roleplay.route("/public_flags", methods=["GET"])
-def public_flagged_messages():
-    """
-    Display all publicly flagged messages.
-    This page is accessible without login.
-    """
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 12, type=int)
-
-    query = FlaggedResponse.query.filter_by(is_public=True)
-    pagination = query.order_by(FlaggedResponse.timestamp.desc()).paginate(page=page, per_page=per_page, error_out=False)
-    public_flags_db = pagination.items
-
-    published_flags_data = []
-    for flagged_item in public_flags_db:
-        chat_history = get_chat_history(flagged_item.session_id)
-        team = Team.query.get(flagged_item.team_id) if flagged_item.team_id else None
-        
-        # Convert ChatMessage objects to dicts if get_chat_history returns them
-        processed_chat_history = []
-        if chat_history:
-            for msg in chat_history:
-                # Filter out system messages
-                if isinstance(msg, dict):
-                    if msg.get('role') != 'system':
-                        processed_chat_history.append(msg)
-                else:
-                    # If ChatMessage objects, convert them and filter
-                    msg_role = getattr(msg, 'role', 'unknown')
-                    if msg_role != 'system':
-                        processed_chat_history.append({"role": msg_role, "content": getattr(msg, 'content', '')})
-        
-        published_flags_data.append({
-            "flagged": flagged_item,
-            "team": team,
-            "chat_history": processed_chat_history
-        })
-
-    return render_template(
-        "roleplay/published_flagged_messages.html",
-        published_flags=published_flags_data,
-        pagination=pagination
-    )
+        app.logger.error(f"Error unflagging message: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @roleplay.route("/update_flagged_summary/<flagged_id>", methods=["POST"])
 @login_required
@@ -861,9 +941,24 @@ def update_flagged_summary(flagged_id):
             return jsonify({"success": False, "error": "Shrnutí nesmí být prázdné."}), 400
 
         flagged_response.summary = new_summary
+        
+        # Update team_id if provided
+        if "team_id" in data:
+            team_id = data["team_id"]
+            # Validate team membership if team_id is provided
+            if team_id:
+                team = Team.query.get(team_id)
+                if not team or current_user not in team.members.all():
+                    return jsonify({"success": False, "error": "Nemáte oprávnění přiřadit označení k tomuto týmu."}), 403
+            flagged_response.team_id = team_id
+        
+        # Update is_public if provided
+        if "is_public" in data:
+            flagged_response.is_public = bool(data["is_public"])
+        
         db.session.commit()
         
-        return jsonify({"success": True, "message": "Shrnutí bylo úspěšně aktualizováno."})
+        return jsonify({"success": True, "message": "Označení bylo úspěšně aktualizováno."})
         
     except Exception as e:
         db.session.rollback()
@@ -871,1048 +966,474 @@ def update_flagged_summary(flagged_id):
         traceback.print_exc()
         return jsonify({"success": False, "error": f"Chyba při aktualizaci shrnutí: {str(e)}"}), 500
 
-@roleplay.route("/unpublish_flagged/<flagged_id>", methods=["POST"])
+
+# ==================== TEAM MANAGEMENT ROUTES ====================
+
+@roleplay.route("/teams/create", methods=["POST"])
 @login_required
-def unpublish_flagged(flagged_id):
-    """
-    Make a flagged response private (unpublish it).
-    Only the user who created the flag can unpublish it.
-    """
+def create_team():
+    """Create a new team."""
     if not COMPETITION_RUNNING:
-        return jsonify({"success": False, "error": "Soutěž již skončila. Rušení zveřejnění není k dispozici."}), 403
+        return jsonify({"success": False, "error": "Soutěž již skončila."}), 403
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "Chybějící data."}), 400
+    
+    name = data.get("name", "").strip()
+    description = data.get("description", "").strip()
+    
+    if not name:
+        return jsonify({"success": False, "error": "Název týmu je povinný."}), 400
+    
+    if len(name) > 100:
+        return jsonify({"success": False, "error": "Název týmu je příliš dlouhý (max 100 znaků)."}), 400
     
     try:
-        flagged_response = FlaggedResponse.query.get(flagged_id)
+        # Check if team name already exists
+        existing_team = Team.query.filter_by(name=name).first()
+        if existing_team:
+            return jsonify({"success": False, "error": "Tým s tímto názvem již existuje."}), 400
         
-        if not flagged_response:
-            return jsonify({"success": False, "error": "Označení nebylo nalezeno."}), 404
-            
-        # Check permissions: only the user who flagged can unpublish
-        if flagged_response.user_id != current_user.id:
-            return jsonify({"success": False, "error": "Nemáte oprávnění k úpravě tohoto označení."}), 403
-            
-        # Set is_public to False to make it private
-        flagged_response.is_public = False
+        # Create team with creator_id
+        new_team = Team(
+            name=name,
+            description=json.dumps({
+                "original_description": description,
+                "creator_id": current_user.id
+            }),
+            creator_id=current_user.id
+        )
+        db.session.add(new_team)
+        db.session.flush()  # Get the team ID
+        
+        # Add creator as first member
+        new_team.members.append(current_user)
+        
         db.session.commit()
         
-        return jsonify({"success": True, "message": "Zpráva byla úspěšně zrušena ze zveřejnění."})
+        return jsonify({
+            "success": True,
+            "message": "Tým byl úspěšně vytvořen!",
+            "team": {
+                "id": new_team.id,
+                "name": new_team.name,
+                "description": description
+            }
+        }), 201
         
     except Exception as e:
         db.session.rollback()
-        print(f"Error unpublishing flagged response: {str(e)}")
+        app.logger.error(f"Error creating team: {str(e)}")
         traceback.print_exc()
-        return jsonify({"success": False, "error": f"Chyba při rušení zveřejnění: {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"Chyba při vytváření týmu: {str(e)}"}), 500
 
-@roleplay.route("/", methods=["GET"])
+
+@roleplay.route("/teams/<int:team_id>/edit", methods=["PUT"])
 @login_required
-def roleplay_home():
-    """
-    Render the roleplay chat interface
-    
-    Returns:
-        The rendered roleplay template
-    """
+def edit_team(team_id):
+    """Edit team details. Only team creator can edit."""
     if not COMPETITION_RUNNING:
-        flash("Soutěž již skončila. Chat není k dispozici. Můžete si prohlédnout veřejně označené zprávy.", "info")
-        return redirect(url_for("roleplay.public_flagged_messages"))
+        return jsonify({"success": False, "error": "Soutěž již skončila."}), 403
     
-    user_teams = current_user.teams # Get user's teams
-    return render_template("roleplay/index.html", user_teams=user_teams) # Pass user_teams to template
-
-@roleplay.route("/teams", methods=["GET"])
-@login_required
-def teams():
-    """
-    List all teams and provide functionality for the user to create or join a team
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({"success": False, "error": "Tým nenalezen."}), 404
     
-    Returns:
-        Rendered template showing teams
-    """
-    if not COMPETITION_RUNNING:
-        flash("Soutěž již skončila. Správa týmů není k dispozici.", "warning")
-        return redirect(url_for("roleplay.public_flagged_messages"))
+    # Check if user is the creator
+    if team.creator_id != current_user.id:
+        return jsonify({"success": False, "error": "Pouze tvůrce týmu může upravovat tým."}), 403
     
-    # Get user's teams
-    user_teams_db = current_user.teams # This is already a list-like collection
-    app.logger.info(f"--- Initial user_teams_db (current_user.teams): {list(user_teams_db)} ---") # Log initial state
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "Chybějící data."}), 400
     
-    # Get all teams
-    all_teams_db = Team.query.order_by(Team.name).all()
-    app.logger.info(f"--- Initial all_teams_db: {list(all_teams_db)} ---") # Log initial state
-
-    def process_team_description(team_list):
-        processed_teams = []
-        app.logger.info(f"--- process_team_description called with team_list: {team_list} ---")
-        if not team_list:
-            app.logger.warning("--- process_team_description received an empty or None team_list ---")
-            return []
-            
-        for team_obj in team_list:
-            # Initialize attributes
-            team_obj.creator_id = None
-            team_obj.display_description = "Tento tým nemá popis." # Default if no description or parsing fails
-
-            if team_obj.description: # Only proceed if there's a description string
-                try:
-                    description_data = json.loads(team_obj.description)
-                    if isinstance(description_data, dict):
-                        # Successfully parsed to a dictionary
-                        team_obj.display_description = description_data.get("original_description", team_obj.description) # Use original_description from JSON if present
-                        
-                        parsed_creator_id = description_data.get("creator_id")
-                        if parsed_creator_id is not None:
-                            try:
-                                team_obj.creator_id = int(parsed_creator_id)
-                            except (ValueError, TypeError):
-                                app.logger.warning(f"Team '{team_obj.name}': creator_id '{parsed_creator_id}' is not a valid integer. Kept as None.")
-                                pass 
-                    else:
-                        # Parsed to JSON, but not a dictionary. Use raw description.
-                        team_obj.display_description = team_obj.description
-                except (json.JSONDecodeError, TypeError):
-                    # Failed to parse JSON or description was not a string. Use raw description.
-                    app.logger.warning(f"Team '{team_obj.name}': Failed to parse description JSON. Raw description: {team_obj.description}")
-                    team_obj.display_description = team_obj.description if team_obj.description else "Chyba při čtení popisu."
-            
-            processed_teams.append(team_obj)
-        app.logger.info(f"--- process_team_description finished, processed_teams: {processed_teams} ---")
-        return processed_teams
-
-    # Process a copy by converting to list if it's not already (e.g. InstrumentedList)
-    user_teams_processed = process_team_description(list(user_teams_db)) 
-    all_teams_processed = process_team_description(list(all_teams_db))
-
-    # ---- START DEBUG LOGGING ----
-    app.logger.info("--- Debugging user_teams_processed in /teams (now /soutez/teams) route ---")
-    if not user_teams_processed:
-        app.logger.warning("--- user_teams_processed is empty or None. No teams to loop through for detailed logging. ---")
-    for team_item in user_teams_processed:
-        app.logger.info(f"Team Name: {team_item.name}, Team ID: {team_item.id}, Type of ID: {type(team_item.id)}, Creator ID: {team_item.creator_id}, Type of Creator ID: {type(team_item.creator_id)}")
-        app.logger.info(f"Current User ID: {current_user.id}, Type: {type(current_user.id)}")
-        if team_item.id is not None and team_item.creator_id == current_user.id:
-            app.logger.info(f"Condition MET for team {team_item.name} (ID: {team_item.id}) to show 'Edit Members' button.")
-            try:
-                # Attempt to build URL here to see if it fails at this stage with known good values
-                test_url = url_for('roleplay.edit_team_members', team_id=team_item.id)
-                app.logger.info(f"Successfully built test URL for edit_team_members: {test_url}")
-            except Exception as e_url:
-                app.logger.error(f"ERROR building test URL for edit_team_members for team ID {team_item.id}: {e_url}")
-        else:
-            is_id_none = team_item.id is None
-            is_creator_match = team_item.creator_id == current_user.id if team_item.creator_id is not None and current_user.id is not None else False
-            app.logger.info(f"Condition NOT MET for team {team_item.name} (ID: {team_item.id}). ID is None: {is_id_none}, Creator matches current user: {is_creator_match} (Creator: {team_item.creator_id}, Current User: {current_user.id})")
-    app.logger.info("--- End Debugging /teams (now /soutez/teams) route ---")
-    # ---- END DEBUG LOGGING ----
+    name = data.get("name", "").strip()
+    description = data.get("description", "").strip()
     
-    return render_template(
-        "roleplay/teams.html",
-        user_teams=user_teams_processed,
-        all_teams=all_teams_processed
-    )
-
-@roleplay.route("/teams/<int:team_id>/metrics", methods=["GET"])
-@login_required
-def get_team_metrics(team_id):
-    """
-    Get metrics for a specific team
+    if not name:
+        return jsonify({"success": False, "error": "Název týmu je povinný."}), 400
     
-    Args:
-        team_id: ID of the team to get metrics for
+    try:
+        # Check if new name conflicts with existing team
+        if name != team.name:
+            existing_team = Team.query.filter_by(name=name).first()
+            if existing_team:
+                return jsonify({"success": False, "error": "Tým s tímto názvem již existuje."}), 400
         
-    Returns:
-        JSON with team metrics
-    """
-    if not COMPETITION_RUNNING:
-        return jsonify({"error": "Soutěž již skončila. Metriky týmů nejsou k dispozici."}), 403
-    
-    team = Team.query.get_or_404(team_id)
-    
-    # Parse team description to get the display description
-    display_description = "Bez popisu"
-    if team.description:
-        try:
-            description_data = json.loads(team.description)
-            if isinstance(description_data, dict):
-                display_description = description_data.get("original_description", "Bez popisu")
-                if not display_description.strip():
-                    display_description = "Bez popisu"
-            else:
-                # If description is not JSON or not a dict, use it directly
-                display_description = team.description
-        except (json.JSONDecodeError, TypeError):
-            # If parsing fails, use raw description
-            display_description = team.description if team.description else "Bez popisu"
-    
-    # Count published flags for this team
-    published_flags_count = FlaggedResponse.query.filter_by(
-        team_id=team_id, 
-        is_public=True
-    ).count()
-    
-    # Count total flags for this team
-    total_flags_count = FlaggedResponse.query.filter_by(team_id=team_id).count()
-    
-    # Get team creation date
-    created_date = team.created_at.strftime('%d.%m.%Y') if team.created_at else "Neznámo"
-    
-    # Count active chat sessions from team members (last 30 days)
-    time_30_days_ago = datetime.utcnow() - timedelta(days=30)
-    team_member_ids = [member.id for member in team.members]
-    active_sessions_count = ChatSession.query.filter(
-        ChatSession.user_id.in_(team_member_ids),
-        ChatSession.created_at >= time_30_days_ago
-    ).count()
-    
-    return jsonify({
-        "member_count": team.members.count(),
-        "published_flags": published_flags_count,
-        "total_flags": total_flags_count,
-        "created_date": created_date,
-        "active_sessions_30d": active_sessions_count,
-        "team_name": team.name,
-        "description": display_description
-    })
-
-@roleplay.route("/teams/new", methods=["GET", "POST"])
-@login_required
-def new_team():
-    """
-    Create a new team
-    
-    Returns:
-        Redirects to teams page on success
-    """
-    if not COMPETITION_RUNNING:
-        flash("Soutěž již skončila. Vytváření nových týmů není k dispozici.", "warning")
-        return redirect(url_for("roleplay.public_flagged_messages"))
-    
-    if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        original_description = request.form.get("description", "").strip()
-        # Handle the new members[] array format
-        members_list = request.form.getlist("members[]")
-        member_emails_to_add = [email.strip() for email in members_list if email.strip()]
+        team.name = name
+        team.description = json.dumps({
+            "original_description": description,
+            "creator_id": current_user.id
+        })
         
-        if not name:
-            flash("Název týmu nesmí být prázdný.", "danger")
-            return render_template("roleplay/new_team.html", name=name, description=original_description)
-            
-        if Team.query.filter_by(name=name).first():
-            flash(f"Tým s názvem '{name}' již existuje.", "warning")
-            return render_template("roleplay/new_team.html", name=name, description=original_description)
-
-        # Prepare structured data for the description field with creator_id
-        team_data_for_description = {
-            "creator_id": str(current_user.id),  # Add creator_id here
-            "original_description": original_description,
-            "invited_member_emails": member_emails_to_add 
-        }
-        
-        # Create the team
-        team = Team(name=name, description=json.dumps(team_data_for_description))
-        
-        # Add the current user as a member
-        team.members.append(current_user)
-        
-        # Add other specified members
-        added_members_count = 0
-        not_found_emails = []
-        if member_emails_to_add:
-            for email in member_emails_to_add:
-                user_to_add = User.query.filter_by(email=email).first()
-                if user_to_add:
-                    if user_to_add not in team.members: # Avoid adding duplicates if creator is also in list
-                        team.members.append(user_to_add)
-                        added_members_count += 1
-                else:
-                    not_found_emails.append(email)
-        
-        db.session.add(team)
         db.session.commit()
         
-        flash_message = f"Tým '{name}' byl vytvořen"
-        if added_members_count > 0:
-            flash_message += f" a {added_members_count} člen(ů) bylo přidáno."
-        else:
-            flash_message += "."
+        return jsonify({
+            "success": True,
+            "message": "Tým byl úspěšně aktualizován!"
+        })
         
-        if not_found_emails:
-            flash_message += f" Uživatelé s e-maily: {', '.join(not_found_emails)} nebyli nalezeni a přidáni."
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error editing team: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": f"Chyba při úpravě týmu: {str(e)}"}), 500
+
+
+@roleplay.route("/teams/<int:team_id>/delete", methods=["DELETE"])
+@login_required
+def delete_team(team_id):
+    """Delete a team. Only team creator can delete."""
+    if not COMPETITION_RUNNING:
+        return jsonify({"success": False, "error": "Soutěž již skončila."}), 403
+    
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({"success": False, "error": "Tým nenalezen."}), 404
+    
+    # Check if user is the creator
+    if team.creator_id != current_user.id:
+        return jsonify({"success": False, "error": "Pouze tvůrce týmu může smazat tým."}), 403
+    
+    try:
+        team_name = team.name
+        db.session.delete(team)
+        db.session.commit()
         
-        flash(flash_message, "success")
-        return redirect(url_for("roleplay.teams"))
+        return jsonify({
+            "success": True,
+            "message": f"Tým '{team_name}' byl úspěšně smazán!"
+        })
         
-    return render_template("roleplay/new_team.html")
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting team: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": f"Chyba při mazání týmu: {str(e)}"}), 500
+
 
 @roleplay.route("/teams/<int:team_id>/leave", methods=["POST"])
 @login_required
 def leave_team(team_id):
-    """
-    Leave a team
-    
-    Args:
-        team_id: ID of the team to leave
-        
-    Returns:
-        Redirects to teams page on success
-    """
+    """Leave a team. Members can leave, but creator cannot."""
     if not COMPETITION_RUNNING:
-        flash("Soutěž již skončila. Opuštění týmu není k dispozici.", "warning")
-        return redirect(url_for("roleplay.public_flagged_messages"))
+        return jsonify({"success": False, "error": "Soutěž již skončila."}), 403
     
-    team = Team.query.get_or_404(team_id)
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({"success": False, "error": "Tým nenalezen."}), 404
     
-    # Check if the user is a member
-    if team in current_user.teams:
-        # Check if the user is not the last member
-        if team.members.count() > 1:
-            team.members.remove(current_user)
-            db.session.commit()
-        else:
-            # User is the last member, so delete the team
-            db.session.delete(team)
-            db.session.commit()
+    # Check if user is a member
+    if current_user not in team.members:
+        return jsonify({"success": False, "error": "Nejste členem tohoto týmu."}), 400
+    
+    # Creator cannot leave their own team
+    if team.creator_id == current_user.id:
+        return jsonify({"success": False, "error": "Tvůrce týmu nemůže opustit tým. Místo toho tým smažte."}), 403
+    
+    try:
+        team.members.remove(current_user)
+        db.session.commit()
         
-    return redirect(url_for("roleplay.teams"))
+        return jsonify({
+            "success": True,
+            "message": f"Opustili jste tým '{team.name}'."
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error leaving team: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": f"Chyba při opouštění týmu: {str(e)}"}), 500
 
-@roleplay.route("/teams/<int:team_id>/edit_members", methods=["GET", "POST"])
+
+@roleplay.route("/teams/<int:team_id>/remove_member/<int:user_id>", methods=["POST"])
 @login_required
-def edit_team_members(team_id):
+def remove_team_member(team_id, user_id):
+    """Remove a member from team. Only team creator can remove members."""
     if not COMPETITION_RUNNING:
-        flash("Soutěž již skončila. Úprava členů týmu není k dispozici.", "warning")
-        return redirect(url_for("roleplay.public_flagged_messages"))
+        return jsonify({"success": False, "error": "Soutěž již skončila."}), 403
     
-    team = Team.query.get_or_404(team_id)
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({"success": False, "error": "Tým nenalezen."}), 404
     
-    # --- Authorization: Parse team.description to get creator_id ---
-    auth_creator_id = None
-    original_description_text_for_auth = "" # Used if needed later for context
-    if team.description:
-        try:
-            description_data = json.loads(team.description)
-            if isinstance(description_data, dict):
-                original_description_text_for_auth = description_data.get("original_description", "")
-                parsed_creator_id = description_data.get("creator_id")
-                if parsed_creator_id is not None:
-                    auth_creator_id = int(parsed_creator_id)
-        except (json.JSONDecodeError, TypeError, ValueError):
-            # Fallback to raw description if parsing fails
-            original_description_text_for_auth = team.description 
-            app.logger.warning(f"Team ID {team.id}: for edit authorization, description was not valid JSON or creator_id was missing/malformed. Raw description: '{team.description}'")
-
-    if auth_creator_id != current_user.id:
-        flash("Nemáte oprávnění upravovat členy tohoto týmu.", "danger")
-        return redirect(url_for("roleplay.teams"))
-
-    if request.method == "POST":
-        # --- Handle removing members ---
-        members_to_remove_ids = request.form.getlist("remove_member")
-        for member_id_str in members_to_remove_ids:
-            try:
-                member_id_to_remove = int(member_id_str)
-                if member_id_to_remove == current_user.id:
-                    continue
-                member_to_remove = User.query.get(member_id_to_remove)
-                if member_to_remove and member_to_remove in team.members:
-                    team.members.remove(member_to_remove)
-            except ValueError:
-                pass
+    # Check if user is the creator
+    if team.creator_id != current_user.id:
+        return jsonify({"success": False, "error": "Pouze tvůrce týmu může odstraňovat členy."}), 403
+    
+    user_to_remove = User.query.get(user_id)
+    if not user_to_remove:
+        return jsonify({"success": False, "error": "Uživatel nenalezen."}), 404
+    
+    # Cannot remove self (creator)
+    if user_id == current_user.id:
+        return jsonify({"success": False, "error": "Nemůžete odstranit sebe. Místo toho tým smažte."}), 400
+    
+    # Check if user is actually a member
+    if user_to_remove not in team.members:
+        return jsonify({"success": False, "error": "Tento uživatel není členem týmu."}), 400
+    
+    try:
+        team.members.remove(user_to_remove)
+        db.session.commit()
         
-        # --- Handle adding new members ---
-        new_members_list = request.form.getlist("new_members[]")
-        new_member_emails_to_add = [email.strip() for email in new_members_list if email.strip()]
+        return jsonify({
+            "success": True,
+            "message": f"Člen byl odstraněn z týmu."
+        })
         
-        # --- Prepare for updating team.description JSON ---
-        # Preserve original_description and manage invited_member_emails
-        final_original_description = "" 
-        current_invited_emails = []
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error removing team member: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": f"Chyba při odstraňování člena: {str(e)}"}), 500
 
-        if team.description:
-            try:
-                desc_data = json.loads(team.description)
-                if isinstance(desc_data, dict):
-                    final_original_description = desc_data.get("original_description", "")
-                    current_invited_emails = desc_data.get("invited_member_emails", [])
-                else: # Was JSON but not a dict, treat original text as description
-                    final_original_description = team.description 
-            except (json.JSONDecodeError, TypeError):
-                 # Not JSON, treat as plain text for original_description
-                 final_original_description = team.description if team.description else ""
+
+@roleplay.route("/teams/<int:team_id>/invite", methods=["POST"])
+@login_required
+def invite_to_team(team_id):
+    """Send invitation(s) to join a team. Only team creator can invite."""
+    if not COMPETITION_RUNNING:
+        return jsonify({"success": False, "error": "Soutěž již skončila."}), 403
+    
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({"success": False, "error": "Tým nenalezen."}), 404
+    
+    # Check if user is the creator
+    if team.creator_id != current_user.id:
+        return jsonify({"success": False, "error": "Pouze tvůrce týmu může posílat pozvánky."}), 403
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "Chybějící data."}), 400
+    
+    emails = data.get("emails", [])
+    message = data.get("message", "").strip()
+    
+    if not emails or not isinstance(emails, list):
+        return jsonify({"success": False, "error": "Prosím zadejte alespoň jeden email."}), 400
+    
+    try:
+        invited_count = 0
+        errors = []
         
-        updated_invited_emails = list(current_invited_emails) # Start with existing invited emails
-
-        if new_member_emails_to_add:
-            current_team_member_emails = [m.email for m in team.members] # Get current members *after* removals
-
-            for email in new_member_emails_to_add:
-                if email in current_team_member_emails: # Check if already a member
-                    if email in updated_invited_emails: # If they were invited, remove from list
-                        updated_invited_emails.remove(email)
-                    continue
-                
-                user_to_add = User.query.filter_by(email=email).first()
-                if user_to_add:
-                    if user_to_add not in team.members:
-                        team.members.append(user_to_add)
-                    
-                    if email in updated_invited_emails: # If they were invited, remove from list
-                        updated_invited_emails.remove(email)
-                else:
-                    if email not in updated_invited_emails: # Add to invited if not found and not already invited
-                         updated_invited_emails.append(email)
-        
-        # Construct the new description JSON
-        new_description_json_content = {
-            "creator_id": str(current_user.id), 
-            "original_description": final_original_description,
-            "invited_member_emails": updated_invited_emails
-        }
-        team.description = json.dumps(new_description_json_content)
+        for email in emails:
+            email = email.strip().lower()
+            
+            if not email:
+                continue
+            
+            # Check if email is valid (basic check)
+            if "@" not in email:
+                errors.append(f"{email}: Neplatný email")
+                continue
+            
+            # Check if user exists
+            user = User.query.filter_by(email=email).first()
+            if not user:
+                errors.append(f"{email}: Uživatel s tímto emailem neexistuje")
+                continue
+            
+            # Check if already a member
+            if user in team.members:
+                errors.append(f"{email}: Již je členem týmu")
+                continue
+            
+            # Check if already invited
+            existing_invite = TeamInvitation.query.filter_by(
+                team_id=team_id,
+                invitee_email=email,
+                status='pending'
+            ).first()
+            
+            if existing_invite:
+                errors.append(f"{email}: Již má nevyřízenou pozvánku")
+                continue
+            
+            # Create invitation
+            invitation = TeamInvitation(
+                team_id=team_id,
+                inviter_id=current_user.id,
+                invitee_email=email,
+                message=message,
+                status='pending'
+            )
+            db.session.add(invitation)
+            invited_count += 1
         
         db.session.commit()
-        return redirect(url_for("roleplay.edit_team_members", team_id=team.id))
-
-    # --- GET request ---
-    # Ensure team object passed to template has members loaded for display
-    team_members = team.members.all() 
-    
-    # For the template, ensure team.name and other attributes are directly accessible
-    # The team object itself is passed, which is fine.
-    
-    return render_template("roleplay/edit_team_members.html", team=team, team_members=team_members, current_user_id=current_user.id)
-
-# Hardcoded admin email for the new admin check page
-ADMIN_EMAIL = "youradmin@example.com"
-
-@roleplay.route("/admin-email-check", methods=["GET"])
-@login_required
-def admin_email_check():
-    """
-    Admin page that checks if the current user's email matches a hardcoded admin email.
-    """
-    if hasattr(current_user, 'email') and current_user.email == ADMIN_EMAIL:
-        return "Přístup povolen: E-mail administrátora se shoduje.", 200 # Added return
-    else:
-        return "Přístup odepřen: E-mail se neshoduje s e-mailem administrátora.", 403 # Added return
-
-@roleplay.route("/admin-dashboard", methods=["GET"])
-@login_required
-def admin_dashboard():
-    """
-    Admin page to view all chats, teams, and flagged messages.
-    Only accessible to users with the hardcoded admin email.
-    """
-    if not (hasattr(current_user, 'email') and current_user.email == ADMIN_EMAIL):
-        flash("Přístup odepřen: Nemáte oprávnění k zobrazení této stránky.", "danger")
-        return redirect(url_for("roleplay.roleplay_home"))
-
-    # Fetching data for summary cards (counts not requiring pagination)
-    total_users = User.query.count()
-    time_24_hours_ago = datetime.utcnow() - timedelta(days=1)
-    chats_last_24h = ChatSession.query.filter(ChatSession.created_at >= time_24_hours_ago).count()
-    flags_last_24h = FlaggedResponse.query.filter(FlaggedResponse.timestamp >= time_24_hours_ago).count()
-
-    # Pagination parameters
-    page_chats = request.args.get('page_chats', 1, type=int)
-    page_teams = request.args.get('page_teams', 1, type=int)
-    page_flags = request.args.get('page_flags', 1, type=int)
-    PER_PAGE = 12  # Items per page, updated from 10 to 12
-
-    # Paginated queries
-    all_chats_pagination = ChatSession.query.order_by(ChatSession.created_at.desc()).paginate(
-        page=page_chats, per_page=PER_PAGE, error_out=False
-    )
-    all_teams_pagination = Team.query.order_by(Team.name).paginate(
-        page=page_teams, per_page=PER_PAGE, error_out=False
-    )
-    all_flagged_messages_pagination = FlaggedResponse.query.order_by(FlaggedResponse.timestamp.desc()).paginate(
-        page=page_flags, per_page=PER_PAGE, error_out=False
-    )
-
-    return render_template(
-        "roleplay/admin_dashboard.html",
-        total_users=total_users,
-        chats_last_24h=chats_last_24h,
-        flags_last_24h=flags_last_24h,
-        all_chats_pagination=all_chats_pagination,
-        all_teams_pagination=all_teams_pagination,
-        all_flagged_messages_pagination=all_flagged_messages_pagination
-    )
-
-@roleplay.route("/admin/chat_history/<session_id>", methods=["GET"])
-@login_required
-def admin_chat_history(session_id):
-    """
-    Admin view for a specific chat session's history.
-    Only accessible to users with the hardcoded admin email.
-    """
-    if not (hasattr(current_user, 'email') and current_user.email == ADMIN_EMAIL):
-        flash("Přístup odepřen: Nemáte oprávnění k zobrazení této stránky.", "danger")
-        return redirect(url_for('roleplay.roleplay_home'))
-
-    # Fetch the chat session object
-    chat_session = ChatSession.query.get(session_id)
-    if not chat_session:
-        flash(f"Chat session {session_id} nebyl nalezen.", "error")
-        return redirect(url_for('roleplay.admin_dashboard'))
-
-    chat_history = get_chat_history(session_id)
-    flagged_messages_for_session = FlaggedResponse.query.filter_by(session_id=session_id).all()
-    # Create a dictionary for quick lookup of flagged messages by index
-    flagged_indices = {fm.message_index: fm for fm in flagged_messages_for_session if fm.message_index is not None}
-
-    # Ensure chat_history is a list of dicts with 'role', 'content', and 'timestamp' (if available)
-    # If get_chat_history returns None or raises an error, handle it gracefully
-    if chat_history is None:
-        flash(f"Nepodařilo se načíst historii chatu pro relaci {session_id}.", "warning")
-        chat_history = []
-    else:
-        # Filter out system messages for admin view as well
-        chat_history = [msg for msg in chat_history if msg.get('role') != 'system']
-
-    return render_template(
-        "roleplay/admin_chat_history.html",
-        session_id=session_id,
-        chat_session=chat_session,
-        chat_history=chat_history,
-        flagged_indices=flagged_indices,
-        flagged_messages_for_session=flagged_messages_for_session
-    )
-
-
-@roleplay.route("/ulovky", methods=["GET"])
-def public_ulovky():
-    """
-    Display all publicly flagged messages (ulovky) with pagination.
-    This page is accessible without login.
-    
-    Query Parameters:
-        page: The page number (default: 1)
-        per_page: Number of items per page (default: 12)
-    
-    Returns:
-        The rendered public flagged messages template
-    """
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 12, type=int)
-
-    # Query for public flagged responses only
-    query = FlaggedResponse.query.filter_by(is_public=True)
-    pagination = query.order_by(FlaggedResponse.timestamp.desc()).paginate(
-        page=page, 
-        per_page=per_page, 
-        error_out=False
-    )
-    public_flags_db = pagination.items
-
-    public_flags_data = []
-    for flagged_item in public_flags_db:
-        try:
-            # Get basic session info
-            session = ChatSession.query.get(flagged_item.session_id)
-            user = User.query.get(flagged_item.user_id)
-            team = Team.query.get(flagged_item.team_id) if flagged_item.team_id else None
-            
-            # Prepare flag data
-            flag_data = {
-                'id': flagged_item.id,
-                'content': flagged_item.content,
-                'summary': flagged_item.summary or "Bez shrnutí",
-                'timestamp': flagged_item.timestamp.strftime('%d.%m.%Y %H:%M'),
-                'session_id': flagged_item.session_id,
-                'message_index': flagged_item.message_index,
-                'user_id': flagged_item.user_id,  # Changed from user_name to user_id
-                'team_name': team.name if team else None,
-                'team_id': team.id if team else None
-            }
-            
-            public_flags_data.append(flag_data)
-            
-        except Exception as e:
-            app.logger.error(f"Error processing flagged item {flagged_item.id}: {str(e)}")
-            continue
-
-    return render_template(
-        "roleplay/public_ulovky.html",
-        public_flags=public_flags_data,
-        pagination=pagination
-    )
-
-@roleplay.route("/ulovky/<conversation_id>", methods=["GET"])
-def public_conversation_detail(conversation_id):
-    """
-    Display the full conversation history for a specific chat session with highlighted flagged messages.
-    This page is accessible without login.
-    
-    Path Parameters:
-        conversation_id: The session ID of the conversation to view
-    
-    Returns:
-        The rendered conversation detail template
-    """
-    try:
-        # Get the chat session
-        chat_session = ChatSession.query.get(conversation_id)
-        if not chat_session:
-            flash("Konverzace nebyla nalezena.", "error")
-            return redirect(url_for("roleplay.public_ulovky"))
         
-        # Get all public flagged messages for this session
-        flagged_messages = FlaggedResponse.query.filter_by(
-            session_id=conversation_id,
-            is_public=True
-        ).all()
-        
-        # If no public flagged messages exist for this session, redirect
-        if not flagged_messages:
-            flash("Tato konverzace neobsahuje žádné veřejné úlovky.", "warning")
-            return redirect(url_for("roleplay.public_ulovky"))
-        
-        # Get the chat history using chat_utils function
-        chat_history_raw = get_chat_history(conversation_id)
-        if not chat_history_raw:
-            flash("Nepodařilo se načíst historii konverzace.", "error")
-            return redirect(url_for("roleplay.public_ulovky"))
-        
-        # Debug: Print raw chat history
-        print(f"DEBUG: Raw chat history length: {len(chat_history_raw)}")
-        for i, msg in enumerate(chat_history_raw):
-            role = msg.get('role', 'unknown') if isinstance(msg, dict) else getattr(msg, 'role', 'unknown')
-            content_preview = (msg.get('content', '') if isinstance(msg, dict) else getattr(msg, 'content', ''))[:50]
-            print(f"DEBUG: Raw message {i}: role={role}, content={content_preview}...")
-        
-        # Filter out system messages for public export
-        chat_history = [msg for msg in chat_history_raw if (msg.get('role') if isinstance(msg, dict) else getattr(msg, 'role', '')) != 'system']
-        
-        # Debug: Print filtered chat history
-        print(f"DEBUG: Filtered chat history length: {len(chat_history)}")
-        for i, msg in enumerate(chat_history):
-            role = msg.get('role', 'unknown') if isinstance(msg, dict) else getattr(msg, 'role', 'unknown')
-            content_preview = (msg.get('content', '') if isinstance(msg, dict) else getattr(msg, 'content', ''))[:50]
-            print(f"DEBUG: Filtered message {i}: role={role}, content={content_preview}...")
-        
-        # Debug: Print flagged messages info
-        print(f"DEBUG: Number of flagged messages: {len(flagged_messages)}")
-        for i, flag in enumerate(flagged_messages):
-            print(f"DEBUG: Flag {i}: message_index={flag.message_index}, content={flag.content[:50] if flag.content else 'None'}...")
-        
-        # Create a map of flagged message indices using multiple strategies
-        flagged_indices = {}
-          # Strategy 1: Direct index mapping (if message_index is valid for filtered history)
-        for flagged_msg in flagged_messages:
-            if flagged_msg.message_index is not None:
-                if 0 <= flagged_msg.message_index < len(chat_history):
-                    # Clean up the summary if it contains AI analysis errors
-                    flagged_indices[flagged_msg.message_index] = {
-                        'id': flagged_msg.id,
-                        'summary': flagged_msg.summary or "Bez shrnutí",
-                        'timestamp': flagged_msg.timestamp.strftime('%d.%m.%Y %H:%M'),
-                        'content': flagged_msg.content,
-                        'method': 'direct_index'
-                    }
-                    print(f"DEBUG: Added flag at direct index {flagged_msg.message_index}")
-        
-        # Strategy 2: Content matching if direct indexing didn't work
-        if not flagged_indices:
-            print("DEBUG: Direct indexing failed, trying content matching...")
-            for flagged_msg in flagged_messages:
-                if flagged_msg.content:
-                    flagged_content = flagged_msg.content.strip()
-                    for i, chat_msg in enumerate(chat_history):
-                        chat_content = (chat_msg.get('content', '') if isinstance(chat_msg, dict) else getattr(chat_msg, 'content', '')).strip()
-                        if chat_content == flagged_content:
-                            flagged_indices[i] = {
-                                'id': flagged_msg.id,
-                                'summary': flagged_msg.summary or "Bez shrnutí",
-                                'timestamp': flagged_msg.timestamp.strftime('%d.%m.%Y %H:%M'),
-                                'content': flagged_msg.content,
-                                'method': 'content_match'
-                            }
-                            print(f"DEBUG: Added flag at content-matched index {i}")
-                            break
-        
-        # Strategy 3: If still no matches, try to match with original (unfiltered) indices
-        if not flagged_indices:
-            print("DEBUG: Content matching failed, trying original index mapping...")
-            for flagged_msg in flagged_messages:
-                if flagged_msg.message_index is not None:
-                    # Try to find the message in the raw history and map to filtered index
-                    if 0 <= flagged_msg.message_index < len(chat_history_raw):
-                        raw_msg = chat_history_raw[flagged_msg.message_index]
-                        raw_content = (raw_msg.get('content', '') if isinstance(raw_msg, dict) else getattr(raw_msg, 'content', '')).strip()
-                        
-                        for filtered_i, filtered_msg in enumerate(chat_history):
-                            filtered_content = (filtered_msg.get('content', '') if isinstance(filtered_msg, dict) else getattr(filtered_msg, 'content', '')).strip()
-                            if filtered_content == raw_content:
-                                flagged_indices[filtered_i] = {
-                                    'id': flagged_msg.id,
-                                    'summary': flagged_msg.summary or "Bez shrnutí",
-                                    'timestamp': flagged_msg.timestamp.strftime('%d.%m.%Y %H:%M'),
-                                    'content': flagged_msg.content,
-                                    'method': 'raw_to_filtered_mapping'
-                                }
-                                print(f"DEBUG: Added flag at raw-to-filtered mapped index {filtered_i}")
-                                break
-
-        print(f"DEBUG: Final flagged_indices: {list(flagged_indices.keys())}")
-        for idx, info in flagged_indices.items():
-            print(f"DEBUG: Index {idx}: method={info['method']}, summary={info['summary'][:30]}...")
-        
-        # Get session creator info
-        user = User.query.get(chat_session.user_id)
-        
-        # Get team info if available
-        team_info = None
-        if flagged_messages[0].team_id:
-            team = Team.query.get(flagged_messages[0].team_id)
-            if team:
-                team_info = {
-                    'id': team.id,
-                    'name': team.name
-                }
-        
-        conversation_data = {
-            'session_id': conversation_id,
-            'user_id': chat_session.user_id,  # Changed from user_name to user_id
-            'created_at': chat_session.created_at.strftime('%d.%m.%Y %H:%M'),
-            'team_info': team_info,
-            'flagged_count': len(flagged_messages)
+        result = {
+            "success": True,
+            "message": f"Odesláno {invited_count} pozvánek!",
+            "invited_count": invited_count
         }
         
-        return render_template(
-            "roleplay/public_conversation_detail.html",
-            conversation=conversation_data,
-            chat_history=chat_history,
-            flagged_indices=flagged_indices,
-            flagged_messages=flagged_messages
-        )
+        if errors:
+            result["errors"] = errors
+        
+        return jsonify(result)
         
     except Exception as e:
-        app.logger.error(f"Error viewing conversation {conversation_id}: {str(e)}")
+        db.session.rollback()
+        app.logger.error(f"Error inviting to team: {str(e)}")
         traceback.print_exc()
-        flash("Došlo k chybě při načítání konverzace.", "error")
-        return redirect(url_for("roleplay.public_ulovky"))
+        return jsonify({"success": False, "error": f"Chyba při posílání pozvánek: {str(e)}"}), 500
 
 
-@roleplay.route("/download", methods=["GET"])
+@roleplay.route("/invitations/pending", methods=["GET"])
 @login_required
-def download_ulovky():
-    """
-    Download a CSV file containing all public flagged messages with user ID, timestamp, and conversation URL.
-    Only accessible to logged-in users.
-    
-    Returns:
-        CSV file download response
-    """
+def get_pending_invitations():
+    """Get all pending invitations for the current user."""
     try:
-        import csv
-        from io import StringIO
-        from flask import make_response
+        invitations = TeamInvitation.query.filter_by(
+            invitee_email=current_user.email,
+            status='pending'
+        ).order_by(TeamInvitation.created_at.desc()).all()
         
-        # Query all public flagged messages
-        public_flags = FlaggedResponse.query.filter_by(is_public=True).order_by(FlaggedResponse.timestamp.desc()).all()
+        result = []
+        for inv in invitations:
+            result.append({
+                "id": inv.id,
+                "team_id": inv.team_id,
+                "team_name": inv.team.name if inv.team else "Neznámý tým",
+                "inviter_email": inv.inviter.email if inv.inviter else "Neznámý",
+                "message": inv.message,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None
+            })
         
-        # Create CSV content
-        output = StringIO()
-        writer = csv.writer(output)
-        
-        # Write CSV header
-        writer.writerow(['User ID', 'Timestamp', 'Conversation URL', 'Flag ID', 'Team Name', 'Summary'])
-        
-        # Write data rows
-        for flag in public_flags:
-            try:
-                # Get team name if available
-                team_name = ""
-                if flag.team_id:
-                    team = Team.query.get(flag.team_id)
-                    if team:
-                        team_name = team.name
-                
-                # Format timestamp
-                timestamp_formatted = flag.timestamp.strftime('%Y-%m-%d %H:%M:%S')
-                
-                # Generate conversation URL
-                conversation_url = url_for('roleplay.public_conversation_detail', 
-                                         conversation_id=flag.session_id, 
-                                         _external=True) + f"#flag-{flag.id}"
-                
-                # Clean summary
-                clean_summary = flag.summary or "Bez shrnutí"
-                if ('AI analýza: Chyba při analýze:' in clean_summary or 
-                    'AI analýza: Úspěšně nachytaný AI asistent' in clean_summary or
-                    'severity' in clean_summary or 
-                    'Analýza AI selhala' in clean_summary or
-                    'Chyba při analýze:' in clean_summary):
-                    clean_summary = 'Úspěšně nachytaný AI asistent'
-                
-                # Write row
-                writer.writerow([
-                    flag.user_id,
-                    timestamp_formatted,
-                    conversation_url,
-                    flag.id,
-                    team_name,
-                    clean_summary
-                ])
-                
-            except Exception as e:
-                app.logger.error(f"Error processing flag {flag.id} for CSV: {str(e)}")
-                continue
-        
-        # Create response
-        output.seek(0)
-        response = make_response(output.getvalue())
-        response.headers['Content-Type'] = 'text/csv'
-        response.headers['Content-Disposition'] = f'attachment; filename="ulovky_ai_soutez_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv"'
-        
-        return response
+        return jsonify({
+            "success": True,
+            "invitations": result,
+            "count": len(result)
+        })
         
     except Exception as e:
-        app.logger.error(f"Error generating CSV download: {str(e)}")
+        app.logger.error(f"Error getting pending invitations: {str(e)}")
         traceback.print_exc()
-        flash("Došlo k chybě při generování CSV souboru.", "error")
-        return redirect(url_for("roleplay.public_ulovky"))
+        return jsonify({"success": False, "error": f"Chyba při načítání pozvánek: {str(e)}"}), 500
 
-@roleplay.route("/download_json", methods=["GET"])
+
+@roleplay.route("/invitations/<int:invitation_id>/accept", methods=["POST"])
 @login_required
-def download_ulovky_json():
-    """
-    Download a comprehensive JSON file containing all public flagged conversations with full context for AI evaluation.
-    Only accessible to logged-in users.
+def accept_invitation(invitation_id):
+    """Accept a team invitation."""
+    if not COMPETITION_RUNNING:
+        return jsonify({"success": False, "error": "Soutěž již skončila."}), 403
     
-    JSON Schema:
-    {
-        "metadata": {
-            "export_timestamp": "ISO 8601 timestamp",
-            "export_version": "1.0",
-            "total_conversations": "number of conversations",
-            "total_flags": "number of flags",
-            "competition_name": "#NachytejAI",
-            "description": "Complete dataset of AI assistant catches for evaluation"
-        },
-        "conversations": [
-            {
-                "conversation_id": "session UUID",
-                "created_at": "ISO 8601 timestamp", 
-                "user_id": "integer - user who created conversation",
-                "flags": [
-                    {
-                        "flag_id": "UUID",
-                        "flagged_by_user_id": "integer",
-                        "flag_timestamp": "ISO 8601 timestamp",
-                        "summary": "string - clean summary",
-                        "original_summary": "string - original with AI analysis",
-                        "team_id": "integer or null",
-                        "team_name": "string or null",
-                        "flagged_message_index": "integer - index in filtered chat",
-                        "flagged_content": "string - the actual flagged message"
-                    }
-                ],
-                "chat_history": [
-                    {
-                        "message_index": "integer - position in conversation",
-                        "role": "user|assistant", 
-                        "content": "string - message content",
-                        "is_flagged": "boolean - whether this message was flagged"
-                    }
-                ],
-                "conversation_stats": {
-                    "total_messages": "integer",
-                    "user_messages": "integer", 
-                    "assistant_messages": "integer",
-                    "flagged_messages": "integer"
-                }
-            }
-        ]
-    }
+    invitation = TeamInvitation.query.get(invitation_id)
+    if not invitation:
+        return jsonify({"success": False, "error": "Pozvánka nenalezena."}), 404
     
-    Returns:
-        JSON file download response with complete conversation data
-    """
+    # Check if invitation is for current user
+    if invitation.invitee_email != current_user.email:
+        return jsonify({"success": False, "error": "Tato pozvánka není pro vás."}), 403
+    
+    # Check if already processed
+    if invitation.status != 'pending':
+        return jsonify({"success": False, "error": "Tato pozvánka již byla vyřízena."}), 400
+    
     try:
-        from flask import make_response
-        import json
+        team = invitation.team
         
-        # Get all public flagged messages grouped by session
-        public_flags = FlaggedResponse.query.filter_by(is_public=True).order_by(FlaggedResponse.timestamp.desc()).all()
+        # Check if already a member
+        if current_user in team.members:
+            invitation.status = 'accepted'
+            invitation.responded_at = datetime.utcnow()
+            db.session.commit()
+            return jsonify({"success": False, "error": "Již jste členem tohoto týmu."}), 400
         
-        # Group flags by session_id
-        sessions_with_flags = {}
-        for flag in public_flags:
-            session_id = flag.session_id
-            if session_id not in sessions_with_flags:
-                sessions_with_flags[session_id] = []
-            sessions_with_flags[session_id].append(flag)
+        # Add user to team
+        team.members.append(current_user)
+        invitation.status = 'accepted'
+        invitation.responded_at = datetime.utcnow()
         
-        conversations_data = []
-        total_flags = 0
+        db.session.commit()
         
-        for session_id, session_flags in sessions_with_flags.items():
-            try:
-                # Get chat session info
-                chat_session = ChatSession.query.get(session_id)
-                if not chat_session:
-                    app.logger.warning(f"Chat session {session_id} not found, skipping")
-                    continue
-                
-                # Get full chat history
-                chat_history_raw = get_chat_history(session_id)
-                if not chat_history_raw:
-                    app.logger.warning(f"No chat history for session {session_id}, skipping")
-                    continue
-                
-                # Filter out system messages for public export
-                chat_history = [msg for msg in chat_history_raw if (msg.get('role') if isinstance(msg, dict) else getattr(msg, 'role', '')) != 'system']
-                
-                # Create flagged indices map for this conversation
-                flagged_indices = {}
-                for flagged_msg in session_flags:
-                    # Try multiple strategies to find the correct message index
-                    found_index = None
-                    
-                    # Strategy 1: Direct index if valid
-                    if flagged_msg.message_index is not None and 0 <= flagged_msg.message_index < len(chat_history):
-                        found_index = flagged_msg.message_index
-                    
-                    # Strategy 2: Content matching
-                    if found_index is None and flagged_msg.content:
-                        flagged_content = flagged_msg.content.strip()
-                        for i, chat_msg in enumerate(chat_history):
-                            chat_content = (chat_msg.get('content', '') if isinstance(chat_msg, dict) else getattr(chat_msg, 'content', '')).strip()
-                            if chat_content == flagged_content:
-                                found_index = i
-                                break
-                    
-                    # Strategy 3: Raw to filtered mapping
-                    if found_index is None and flagged_msg.message_index is not None:
-                        if 0 <= flagged_msg.message_index < len(chat_history_raw):
-                            raw_msg = chat_history_raw[flagged_msg.message_index]
-                            raw_content = (raw_msg.get('content', '') if isinstance(raw_msg, dict) else getattr(raw_msg, 'content', '')).strip()
-                            
-                            for filtered_i, filtered_msg in enumerate(chat_history):
-                                filtered_content = (filtered_msg.get('content', '') if isinstance(filtered_msg, dict) else getattr(filtered_msg, 'content', '')).strip()
-                                if filtered_content == raw_content:
-                                    found_index = filtered_i
-                                    break
-                    
-                    if found_index is not None:
-                        flagged_indices[found_index] = flagged_msg
-                
-                # Prepare flags data
-                flags_data = []
-                for flag in session_flags:
-                    # Find the message index for this flag
-                    message_index = None
-                    for idx, flag_obj in flagged_indices.items():
-                        if flag_obj.id == flag.id:
-                            message_index = idx
-                            break
-                    
-                    # Get team info if available
-                    team_name = None
-                    if flag.team_id:
-                        team = Team.query.get(flag.team_id)
-                        if team:
-                            team_name = team.name or ""
-                    
-                    # Clean summary with proper UTF-8 handling
-                    clean_summary = flag.summary or "Bez shrnutí"
-                    original_summary = flag.summary or ""
-                    if ('AI analýza: Chyba při analýze:' in clean_summary or 
-                        'AI analýza: Úspěšně nachytaný AI asistent' in clean_summary or
-                        'severity' in clean_summary or 
-                        'Analýza AI selhala' in clean_summary or
-                        'Chyba při analýze:' in clean_summary):
-                        clean_summary = 'Úspěšně nachytaný AI asistent'
-                    
-                    # Ensure all string fields are properly encoded
-                    flag_data = {
-                        "flag_id": str(flag.id),
-                        "flagged_by_user_id": flag.user_id,
-                        "flag_timestamp": flag.timestamp.isoformat(),
-                        "summary": str(clean_summary),
-                        "original_summary": str(original_summary),
-                        "team_id": flag.team_id,
-                        "team_name": str(team_name) if team_name else None,
-                        "flagged_message_index": message_index,
-                        "flagged_content": str(flag.content) if flag.content else ""
-                    }
-                    flags_data.append(flag_data)
-                    total_flags += 1
-                
-                # Prepare chat history with flagged indicators
-                chat_messages = []
-                user_messages = 0
-                assistant_messages = 0
-                
-                for i, msg in enumerate(chat_history):
-                    role = msg.get('role') if isinstance(msg, dict) else getattr(msg, 'role', 'unknown')
-                    content = msg.get('content') if isinstance(msg, dict) else getattr(msg, 'content', '')
-                    is_flagged = i in flagged_indices
-                    
-                    if role == 'user':
-                        user_messages += 1
-                    elif role == 'assistant':
-                        assistant_messages += 1
-                    
-                    # Ensure content is properly handled as UTF-8 string
-                    message_data = {
-                        "message_index": i,
-                        "role": str(role),
-                        "content": str(content),
-                        "is_flagged": is_flagged
-                    }
-                    chat_messages.append(message_data)
-                
-                # Prepare conversation data
-                conversation_data = {
-                    "conversation_id": str(session_id),
-                    "created_at": chat_session.created_at.isoformat(),
-                    "user_id": chat_session.user_id,
-                    "flags": flags_data,
-                    "chat_history": chat_messages,
-                    "conversation_stats": {
-                        "total_messages": len(chat_messages),
-                        "user_messages": user_messages,
-                        "assistant_messages": assistant_messages,
-                        "flagged_messages": len(flags_data)
-                    }
-                }
-                conversations_data.append(conversation_data)
-                
-            except Exception as e:
-                app.logger.error(f"Error processing conversation {session_id}: {str(e)}")
-                continue
-        
-        # Create the complete JSON structure
-        export_data = {
-            "metadata": {
-                "export_timestamp": datetime.utcnow().isoformat(),
-                "export_version": "1.0",
-                "total_conversations": len(conversations_data),
-                "total_flags": total_flags,
-                "competition_name": "#NachytejAI",
-                "description": "Complete dataset of AI assistant catches for evaluation"
-            },
-            "conversations": conversations_data
-        }
-        
-        # Create JSON response with explicit UTF-8 encoding
-        json_content = json.dumps(export_data, ensure_ascii=False, indent=2, separators=(',', ': '))
-        
-        # Ensure the content is properly encoded as UTF-8 bytes
-        json_bytes = json_content.encode('utf-8')
-        
-        response = make_response(json_bytes)
-        response.headers['Content-Type'] = 'application/json; charset=utf-8'
-        response.headers['Content-Disposition'] = f'attachment; filename="ulovky_ai_complete_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.json"'
-        response.headers['Content-Length'] = str(len(json_bytes))
-        
-        return response
+        return jsonify({
+            "success": True,
+            "message": f"Úspěšně jste se připojili k týmu '{team.name}'!"
+        })
         
     except Exception as e:
-        app.logger.error(f"Error generating JSON download: {str(e)}")
+        db.session.rollback()
+        app.logger.error(f"Error accepting invitation: {str(e)}")
         traceback.print_exc()
-        flash("Došlo k chybě při generování JSON souboru.", "error")
-        return redirect(url_for("roleplay.public_ulovky"))
+        return jsonify({"success": False, "error": f"Chyba při přijímání pozvánky: {str(e)}"}), 500
+
+
+@roleplay.route("/invitations/<int:invitation_id>/decline", methods=["POST"])
+@login_required
+def decline_invitation(invitation_id):
+    """Decline a team invitation."""
+    invitation = TeamInvitation.query.get(invitation_id)
+    if not invitation:
+        return jsonify({"success": False, "error": "Pozvánka nenalezena."}), 404
+    
+    # Check if invitation is for current user
+    if invitation.invitee_email != current_user.email:
+        return jsonify({"success": False, "error": "Tato pozvánka není pro vás."}), 403
+    
+    # Check if already processed
+    if invitation.status != 'pending':
+        return jsonify({"success": False, "error": "Tato pozvánka již byla vyřízena."}), 400
+    
+    try:
+        invitation.status = 'declined'
+        invitation.responded_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": "Pozvánka byla odmítnuta."
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error declining invitation: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": f"Chyba při odmítání pozvánky: {str(e)}"}), 500
+
+
+@roleplay.route("/teams/<int:team_id>/pending_invitations", methods=["GET"])
+@login_required
+def get_team_pending_invitations(team_id):
+    """Get pending invitations for a team. Only team creator can see this."""
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({"success": False, "error": "Tým nenalezen."}), 404
+    
+    # Check if user is the creator
+    if team.creator_id != current_user.id:
+        return jsonify({"success": False, "error": "Pouze tvůrce týmu může vidět pozvánky."}), 403
+    
+    try:
+        invitations = TeamInvitation.query.filter_by(
+            team_id=team_id,
+            status='pending'
+        ).order_by(TeamInvitation.created_at.desc()).all()
+        
+        result = []
+        for inv in invitations:
+            result.append({
+                "id": inv.id,
+                "invitee_email": inv.invitee_email,
+                "message": inv.message,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None
+            })
+        
+        return jsonify({
+            "success": True,
+            "invitations": result,
+            "count": len(result)
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error getting team pending invitations: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": f"Chyba při načítání pozvánek: {str(e)}"}), 500
+
+

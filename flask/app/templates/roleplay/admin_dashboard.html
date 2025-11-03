@@ -1,7 +1,28 @@
 {% extends "base.html" %}
 
 {% block content %}
-{% include "roleplay/_roleplay_navbar.html" %}
+<body>
+    <div class="layout">
+        <div class="content">
+            {% include "roleplay/_roleplay_navbar.html" %}
+
+            <div class="chat open">
+                <div class="chat-header">
+                    <div class="chat-header-user">
+                        <button class="btn btn-outline-light mobile-navigation-button mr-3 d-xl-none d-inline" onclick="document.body.classList.toggle('navigation-open')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <line x1="3" y1="12" x2="21" y2="12"></line>
+                                <line x1="3" y1="6" x2="21" y2="6"></line>
+                                <line x1="3" y1="18" x2="21" y2="18"></line>
+                            </svg>
+                        </button>
+                        <h5 class="mb-0">Admin Dashboard</h5>
+                    </div>
+                </div>
+                <div class="chat-body">
+                    <div class="container-fluid p-4">
 
 {% macro pagination_nav(pagination, endpoint, pagination_param_name) %}
 <nav aria-label="Navigace stránky">
@@ -110,7 +131,6 @@
                                     <strong>Uživatel:</strong> {{ chat_session.user.email }} <br>
                                     <strong>ID role:</strong> {{ chat_session.role_id }} <br>
                                     <strong>Vytvořeno:</strong> {{ chat_session.created_at.strftime('%Y-%m-%d %H:%M:%S') }} <br>
-                                    <a href="{{ url_for('roleplay.admin_chat_history', session_id=chat_session.id) }}" class="btn btn-sm btn-info mt-2">Zobrazit historii</a>
                                 </li>
                             {% endfor %}
                         </ul>
@@ -171,7 +191,6 @@
                                     {{ clean_summary }} <br>
                                     <strong>Časové razítko:</strong> {{ flagged_message.timestamp.strftime('%Y-%m-%d %H:%M:%S') }} <br>
                                     <strong>Veřejné:</strong> {{ flagged_message.is_public }} <br>
-                                    <a href="{{ url_for('roleplay.admin_chat_history', session_id=flagged_message.session_id) }}" class="btn btn-sm btn-info mt-2">Zobrazit kontext chatu</a>
                                 </li>
                             {% endfor %}
                         </ul>
@@ -183,5 +202,11 @@
             </div>
         </div>
     </div>
-</div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
 {% endblock %}

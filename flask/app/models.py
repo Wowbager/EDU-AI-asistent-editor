@@ -328,6 +328,7 @@ class Team(db.Model):
     name = db.Column(VARCHAR(100), unique=True, nullable=False)
     description = db.Column(db.Text())
     created_at = db.Column(db.DateTime, server_default=db.func.now())
+    creator_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     
     # Relationships
     members = db.relationship(
@@ -337,6 +338,8 @@ class Team(db.Model):
         lazy="dynamic"
     )
     flagged_responses = db.relationship("FlaggedResponse", backref="team", lazy=True)
+    invitations = db.relationship("TeamInvitation", backref="team", lazy=True, cascade="all, delete-orphan")
+    creator = db.relationship("User", foreign_keys=[creator_id], backref="created_teams")
     
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
@@ -344,3 +347,28 @@ class Team(db.Model):
     
     def __repr__(self):
         return f"Team {self.name}"
+
+
+class TeamInvitation(db.Model):
+    """Model for tracking team invitations."""
+
+    __tablename__ = "team_invitations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+    inviter_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    invitee_email = db.Column(db.String(255), nullable=False, index=True)
+    status = db.Column(db.String(20), default='pending', nullable=False)  # pending, accepted, declined
+    message = db.Column(db.Text(), nullable=True)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+    responded_at = db.Column(db.DateTime, nullable=True)
+    
+    # Relationships
+    inviter = db.relationship("User", foreign_keys=[inviter_id], backref="sent_invitations")
+    
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+    
+    def __repr__(self):
+        return f"TeamInvitation(team_id={self.team_id}, invitee={self.invitee_email}, status={self.status})"
