@@ -49,10 +49,9 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SESSION_COOKIE_DOMAIN"] = False
 app.config["JSON_SORT_KEYS"] = False
 
-app.config["SUPER_ADMINS"] = [
-    "Ben.m.dedic@gmail.com",
-    "Marek2@dedi.cz"
-]
+# Load super admins from environment variable (comma-separated email list)
+super_admins_env = os.environ.get("SUPER_ADMINS", "")
+app.config["SUPER_ADMINS"] = [email.strip() for email in super_admins_env.split(",") if email.strip()]
 
 # Add the ProxyFix middleware if it's not already above this section
 # from werkzeug.middleware.proxy_fix import ProxyFix 

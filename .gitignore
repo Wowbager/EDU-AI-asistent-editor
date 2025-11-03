@@ -95,6 +95,11 @@ profile_default/
 ipython_config.py
 
 unused/
+docs/
+
+.bash_history
+*.aof
+*.rdb
 
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is
