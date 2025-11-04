@@ -73,6 +73,7 @@ def call_openai_chat_completion(model, messages, request_timeout=None):
                 "Nepoužívejte fráze jako 'jsem jazykový model' nebo 'nemám přístup k internetu'. "
                 "Snažte se odpovídat jako daný člověk, ber v potaz co zná a jak by měl odpovídat."
                 "nezapomeň, že odpovídáš do chatu, takže se vyhni formálním pozdravům a rozloučením."
+                "odpovídej krátce, maximálně 200 slov."
             ),
         }        
         messages_to_send = [general_info] + messages + [general_info]

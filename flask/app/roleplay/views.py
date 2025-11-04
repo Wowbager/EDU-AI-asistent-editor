@@ -92,21 +92,21 @@ def get_roles():
     
     try:
         # Compose the system prompt
-        system_prompt = """Jste AI pro generování vzdělávacích rolí pro soutěž #NachytejAI. Pro daný předmět vygenerujte PŘESNĚ PĚT rolí bohatých na historické detaily.
+        system_prompt = """Jsi AI asistent učitele pro přípravu role-play aktivity do soutěže NachytejAI. Pro daný předmět vygenerujte PŘESNĚ PĚT rolí bohatých na historické detaily.
 
 KRITICKÉ: Odpověď MUSÍ být POUZE platný JSON. Žádný text před ani po JSON!
 
 PRAVIDLA:
 • Role nesmí být urážlivé nebo nevhodné.
-• Pro neplatné předměty vraťte prázdné pole: []
+• Pro neplatné předměty navrhni možné související osoby/role.
 • Předmět může být hovorový (čeština, matika, děják, zemák).
 • Odpověď: JSON pole s pěti objekty:
 [
   {"id": "unikátni_id", "title": "Název role", "brief": "Popis role (2-3 věty)"}
 ]
 • Jazyk: Čeština.
-• Role: Historicky reálné osobnosti, profese nebo koncepty.
-• Soutěž: Role by měly obsahovat konkrétní fakta.
+• Role: Historicky reálné osobnosti, profese, předměty, fyzikální děje nebo koncepty.
+• Soutěž: Role souvisí se školními fakty.
 
 PŘÍKLAD pro 'Starověký Řím':
 [
@@ -124,7 +124,7 @@ PŘÍKLAD pro 'Starověký Řím':
             },
             {
                 "role": "user",
-                "content": f"{subject=}"
+                "content": f"předmět: {subject}"
             }
         ]
         

@@ -18,7 +18,7 @@ CHAT_TIMEOUT = 600  # Timeout for chat API calls (seconds)
 # AI generation parameters
 CHAT_TEMPERATURE = 1  # Temperature for chat responses
 CHAT_MAX_TOKENS = 400  # Max tokens for chat responses
-ROLE_GEN_MAX_TOKENS = 800  # Max tokens for role generation
+ROLE_GEN_MAX_TOKENS = 1200  # Max tokens for role generation
 
 # Redis settings
 CHAT_HISTORY_TTL = 86400 * 14  # Chat history TTL in Redis (14 days)
