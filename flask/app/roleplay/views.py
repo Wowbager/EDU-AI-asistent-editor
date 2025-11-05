@@ -307,6 +307,7 @@ def chat():
                 "• Nepoužívej markdown.\n"
                 "• Zaměř se pouze na oblast '{current_subject}'.\n"
                 "• Odpovídej přirozeně, i když si nejsi jistý všemi fakty."
+                "Na začátku se krátce představ a stručně řekni něco o sobě."
             )
             
             # For the first message, create chat history with system prompt and user instructions
@@ -356,7 +357,9 @@ def chat():
             })
             
             save_chat_history(chat_session.id, chat_history)
-            
+
+            print(f"{chat_history=}\n{chat_history_for_ai=}\n{assistant_reply_content=}", flush=True)
+
             return jsonify({
                 "session_id": str(chat_session.id),
                 "reply": assistant_reply_content
