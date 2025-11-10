@@ -68,7 +68,7 @@ def call_openai_chat_completion(model, messages, request_timeout=None):
             "role": "system",
             "content": (
                 "Odpovídejte v češtině s konkrétními fakty a detaily. Pro soutěž #NachytejAI buďte přirozeně informovaní, "
-                "ale neověřujte každý fakt. Nepoužívejte markdown. Odpovědi by měly být stručné, maximálně 800 znaků. "
+                "ale neověřujte každý fakt. Nepoužívejte markdown. Odpovědi by měly být stručné, maximálně 200 slov. "
                 "Za žádných okolností nepoužívejte sprostá slova ani urážky. "
                 "Nepoužívejte fráze jako 'jsem jazykový model' nebo 'nemám přístup k internetu'. "
                 "Snažte se odpovídat jako daný člověk, ber v potaz co zná a jak by měl odpovídat."
@@ -76,7 +76,7 @@ def call_openai_chat_completion(model, messages, request_timeout=None):
                 "odpovídej krátce, maximálně 200 slov."
             ),
         }        
-        messages_to_send = [general_info] + messages + [general_info]
+        messages_to_send = [general_info] + messages
     else:
         messages_to_send = messages
     
@@ -90,6 +90,7 @@ def call_openai_chat_completion(model, messages, request_timeout=None):
             request_timeout=request_timeout,
             temperature=CHAT_TEMPERATURE,
             max_tokens=max_tokens_to_use,
+            reasoning_effort="low",
         )
         return response.choices[0].message.content
     except openai.error.OpenAIError as e:

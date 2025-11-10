@@ -307,7 +307,7 @@ def chat():
                 "• Nepoužívej markdown.\n"
                 "• Zaměř se pouze na oblast '{current_subject}'.\n"
                 "• Odpovídej přirozeně, i když si nejsi jistý všemi fakty."
-                "Na začátku se krátce představ a stručně řekni něco o sobě."
+                "Na začátku se krátce představ a stručně řekni něco o sobě. První odpověď musí mít maximálně tři věty!"
             )
             
             # For the first message, create chat history with system prompt and user instructions
