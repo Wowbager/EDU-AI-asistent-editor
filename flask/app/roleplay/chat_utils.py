@@ -269,4 +269,11 @@ def prepare_messages_for_ai(chat_history):
     
     return filtered_messages
 
+def generate_session_id_for_roleplay_chat(role_information):
+    if redis_client:
+        id = uuid.uuid4()
+        while redis_client.exists(f"chat_history:{str(id)}"):
+            id = uuid.uuid4()
+        redis_client.set(f"chat_history:{str(id)}", pickle.dumps(role_information), ex=30)
 
+    return str(id)

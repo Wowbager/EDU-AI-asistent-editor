@@ -83,6 +83,9 @@
     </div>
 </body>
 
+<!-- WebSocket Chat Implementation -->
+<script src="{{ url_for('static', filename='js/websocket-chat.js') }}"></script>
+
 <script>
     // Global variables
     let currentSessionId = null;
@@ -273,6 +276,9 @@
 
     // Function to reset to role selection
     function resetToRoleSelection() {
+        // Disconnect WebSocket if connected
+        disconnectWebSocket();
+        
         // Reset the chat session
         currentSessionId = null;
         currentRoleId = null;
@@ -506,71 +512,86 @@
         document.getElementById('chat-placeholder').style.display = 'none';
         document.getElementById('chat-body-content').style.display = 'flex';
         document.getElementById('chat-footer-content').style.display = 'block';
-        msgInput.style.height = '50px'; // ADD THIS LINE to set fixed height
-        msgInput.focus();
+        msgInput.style.height = '50px';
         
-        console.log("startChat: Initiating chat setup..."); // New log
+        console.log("startChat: Initiating chat setup...");
 
-        const firstUserMessage = `Jsi ${roleTitle} (${roleBrief}). Jsi profesionál v oblasti '${subject}'. Představ se mi prosím, stručně vysvětli svou specializaci a řekni, jakým stylem budeš komunikovat. Poté vyčkej na mé pokyny.`;
+        // Prepare system prompt and first user message
+        const systemPrompt = `Jsi ${roleTitle}. ${roleBrief}. Jsi profesionál v oblasti '${subject}'.`;
+        const firstUserMessage = `Představ se mi prosím, stručně vysvětli svou specializaci a řekni, jakým stylem budeš komunikovat. Poté vyčkej na mé pokyny.`;
 
         try {
-            console.log("startChat: Fetching initial response..."); // New log
-            addSystemMessage("Generuji úvodní odpověď asistenta...");
+            console.log("startChat: Generating session ID...");
+            addSystemMessage("Připravuji chat...");
 
-            const response = await fetch("{{ url_for('roleplay.chat') }}", {
+            // Step 1: Generate session ID from Flask
+            const response = await fetch("{{ url_for('roleplay.generate_session_id') }}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     role_id: currentRoleId,
-                    message: firstUserMessage,
-                    session_id: null,
-                    subject: subject,
                     role_title: roleTitle,
-                    role_brief: roleBrief
+                    role_brief: roleBrief,
+                    subject: subject,
+                    system_prompt: systemPrompt,
+                    general_info: `Odpovídej v češtině, v kontextu předmětu: ${subject}. Maximálně 200 slov.`
                 })
             });
-            console.log("startChat: Fetch response received", { status: response.status, ok: response.ok }); // New log
-
-            const systemMessages = chatLog.querySelectorAll('.alert.alert-warning');
-            systemMessages.forEach(msg => msg.remove());
-            console.log("startChat: 'Generuji...' message removed."); // New log
-
+            
             if (!response.ok) {
-                let errorData = { error: `Server error: ${response.status}` };
-                try {
-                    errorData = await response.json();
-                    console.error("startChat: Server response not OK (JSON parsed)", errorData); // New log
-                } catch (e) {
-                    console.error("startChat: Server response not OK (not JSON)", response.statusText, await response.text()); // New log
-                }
+                const errorData = await response.json();
                 throw new Error(errorData.error || `Server error: ${response.status}`);
             }
 
             const data = await response.json();
-            console.log("startChat: Response data parsed", data); // New log
-
             currentSessionId = data.session_id;
-            addMessage('assistant', data.reply);
-            assistantMessageCount++;
-            console.log("startChat: Assistant message added, session ID set to:", currentSessionId); // New log
+            console.log("startChat: Session ID received:", currentSessionId);
+
+            // Step 2: Connect to WebSocket
+            addSystemMessage("Připojuji k chatovacímu serveru...");
+            await connectWebSocket(currentSessionId);
+            
+            // Remove setup messages
+            const systemMessages = chatLog.querySelectorAll('.alert.alert-warning');
+            systemMessages.forEach(msg => msg.remove());
+            
+            console.log("startChat: WebSocket connected, sending first message...");
+            
+            // Step 3: Send first user message via WebSocket
+            addMessage('user', firstUserMessage);
+            const sent = sendWebSocketMessage(firstUserMessage);
+            
+            if (!sent) {
+                throw new Error("Nepodařilo se odeslat úvodní zprávu");
+            }
+            
+            // Enable inputs (they'll be managed by WebSocket responses)
+            msgInput.disabled = false;
+            sendBtn.disabled = false;
+            msgInput.focus();
 
         } catch (error) {
-            console.error('startChat: Catch block error', error); // New log
+            console.error('startChat: Error:', error);
             const systemMessages = chatLog.querySelectorAll('.alert.alert-warning');
-            if (systemMessages) systemMessages.forEach(msg => msg.remove());
+            systemMessages.forEach(msg => msg.remove());
             addSystemMessage(`Chyba při zahájení chatu: ${error.message}`);
-        } finally {
-            console.log("startChat: Finally block executed."); // New log
             msgInput.disabled = false;
             sendBtn.disabled = false;
         }
     }
         
-          async function sendMessage() {
+          function sendMessage() {
             const message = msgInput.value.trim();
-            if (!message || !currentSessionId || !currentRoleId) {
+            
+            // Validation
+            if (!message) {
+                return;
+            }
+            
+            if (!isWebSocketConnected()) {
+                addSystemMessage("⚠️ Připojení k serveru bylo ztraceno. Prosím, začněte novou konverzaci.");
                 return;
             }
             
@@ -593,63 +614,12 @@
             charCounter.className = 'text-muted mt-1';
             msgInput.style.height = '50px';
             
-            // Add processing message
-            addSystemMessage("Generuji odpověď asistenta...");
-            
-            let data = null; // Declare data variable in function scope
-            
-            try {
-                // Send message to API
-                const response = await fetch("{{ url_for('roleplay.chat') }}", {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json', 
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        session_id: currentSessionId,
-                        role_id: currentRoleId,
-                        message: message
-                    })
-                });
-                
-                // Remove processing message
-                const systemMessages = chatLog.querySelectorAll('.alert.alert-warning');
-                systemMessages.forEach(msg => msg.remove());
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `Server error: ${response.status}`);
-                }
-                
-                data = await response.json(); // Assign to the outer scope variable
-                
-                // Check if limit reached
-                if (data.limit_reached) {
-                    addSystemMessage("⚠️ " + data.reply);
-                    // Keep inputs disabled when limit is reached
-                    return;
-                }
-                
-                // Add assistant's reply to chat log
-                addMessage('assistant', data.reply);
-                
-                // Scroll to bottom
-                chatLog.scrollTop = chatLog.scrollHeight;
-                
-            } catch (error) {
-                console.error('Chyba při odesílání zprávy:', error);
-                // Remove processing message on error
-                const systemMessages = chatLog.querySelectorAll('.alert.alert-warning');
-                systemMessages.forEach(msg => msg.remove());
-                addSystemMessage(`Chyba: ${error.message}`);
-            } finally {
-                // Always re-enable inputs unless limit was reached
-                if (!data || !data.limit_reached) {
-                    sendBtn.disabled = false;
-                    msgInput.disabled = false;
-                    msgInput.focus();
-                }
+            // Send message via WebSocket
+            const sent = sendWebSocketMessage(message);
+            if (!sent) {
+                // If sending failed, re-enable inputs
+                sendBtn.disabled = false;
+                msgInput.disabled = false;
             }
         }    
         function addMessage(role, content) {
@@ -678,13 +648,31 @@
         }
     }
     
-    function addSystemMessage(content) {
+    function addSystemMessage(content, isProcessing = false) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'alert alert-warning';
+        if (isProcessing) {
+            messageDiv.classList.add('processing-message');
+        }
         messageDiv.textContent = content;
         chatLog.appendChild(messageDiv);
         chatLog.scrollTop = chatLog.scrollHeight;
-    }    // Event listener for flag summary character counter
+    }
+    
+    function clearProcessingMessages() {
+        const processingMessages = chatLog.querySelectorAll('.alert.processing-message');
+        processingMessages.forEach(msg => msg.remove());
+    }
+    
+    // Export functions globally for WebSocket handler
+    window.chatLog = chatLog;
+    window.addMessage = addMessage;
+    window.addSystemMessage = addSystemMessage;
+    window.clearProcessingMessages = clearProcessingMessages;
+    window.sendBtn = sendBtn;
+    window.msgInput = msgInput;
+    
+    // Event listener for flag summary character counter
     if (flagSummaryInput) {
         flagSummaryInput.addEventListener('input', () => {
             const currentLength = flagSummaryInput.value.length;

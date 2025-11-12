@@ -20,7 +20,13 @@ from .chat_utils import (
     get_role_by_id,
     prepare_messages_for_ai,
     count_assistant_messages,
-    call_openai_chat_completion
+    call_openai_chat_completion,
+    generate_session_id_for_roleplay_chat
+)
+from .ai_prompts import (
+    create_roleplay_system_prompt,
+    prepare_session_prompts,
+    ROLE_GENERATION_SYSTEM_PROMPT
 )
 from .config import (
     COMPETITION_RUNNING,
@@ -91,36 +97,11 @@ def get_roles():
         }), 200
     
     try:
-        # Compose the system prompt
-        system_prompt = """Jsi AI asistent učitele pro přípravu role-play aktivity do soutěže NachytejAI. Pro daný předmět vygenerujte PŘESNĚ PĚT rolí bohatých na historické detaily.
-
-KRITICKÉ: Odpověď MUSÍ být POUZE platný JSON. Žádný text před ani po JSON!
-
-PRAVIDLA:
-• Role nesmí být urážlivé nebo nevhodné.
-• Pro neplatné předměty navrhni možné související osoby/role.
-• Předmět může být hovorový (čeština, matika, děják, zemák).
-• Odpověď: JSON pole s pěti objekty:
-[
-  {"id": "unikátni_id", "title": "Název role", "brief": "Popis role (2-3 věty)"}
-]
-• Jazyk: Čeština.
-• Role: Historicky reálné osobnosti, profese, předměty, fyzikální děje nebo koncepty.
-• Soutěž: Role souvisí se školními fakty.
-
-PŘÍKLAD pro 'Starověký Řím':
-[
-  {"id": "julius_caesar", "title": "Julius Caesar", "brief": "Římský vojevůdce, dobyl Galii, zavražděn v Senátu."},
-  {"id": "rimsky_legionar", "title": "Římský legionář", "brief": "Veterán Caesarovy legie, bojoval u Alessie."},
-  {"id": "marcus_aurelius", "title": "Marcus Aurelius", "brief": "Římský císař filozof, vedl války s Markomany."},
-  {"id": "cicero", "title": "Cicero", "brief": "Římský řečník, odhalil Catilinu spiknutí."},
-  {"id": "spartacus", "title": "Spartacus", "brief": "Gladiátor, vedl povstání otroků proti Římu."}
-]"""
-        # Make the API call to OpenAI
+        # Use the centralized role generation system prompt
         messages_for_openai = [
             {
                 "role": "system",
-                "content": system_prompt
+                "content": ROLE_GENERATION_SYSTEM_PROMPT
             },
             {
                 "role": "user",
@@ -1439,4 +1420,61 @@ def get_team_pending_invitations(team_id):
         traceback.print_exc()
         return jsonify({"success": False, "error": f"Chyba při načítání pozvánek: {str(e)}"}), 500
 
-
+@roleplay.route("/generate_session_id", methods=["POST"])
+@login_required
+def generate_session_id():
+    """Generate a unique session ID for WebSocket chat"""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({"error": "Chybějící data"}), 400
+        
+    role_id = data.get("role_id")
+    role_title = data.get("role_title", "")
+    role_brief = data.get("role_brief", "")
+    subject = data.get("subject", "")
+    custom_instructions = data.get("custom_instructions", "")
+    
+    if not role_id:
+        return jsonify({"error": "Chybějící povinné pole: role_id"}), 400
+    
+    # Generate all prompts using centralized prompt engineering module
+    prompts = prepare_session_prompts(
+        role_title=role_title,
+        role_description=role_brief,
+        subject=subject,
+        custom_instructions=custom_instructions
+    )
+    
+    # Prepare role information for FastAPI
+    role_information = {
+        "user_id": current_user.id,
+        "role": {
+            "id": role_id,
+            "title": role_title,
+            "description": role_brief
+        },
+        "system_prompt": prompts['system_prompt'],
+        "general_info": prompts['general_info'],
+        "subject": subject
+    }
+    
+    # Generate session ID and store in Redis
+    session_id = generate_session_id_for_roleplay_chat(role_information)
+    
+    # Create ChatSession in database immediately for flagging support
+    try:
+        chat_session = ChatSession(
+            id=session_id,
+            user_id=current_user.id,
+            role_id=role_id
+        )
+        db.session.add(chat_session)
+        db.session.commit()
+        app.logger.info(f"Created chat session {session_id} for user {current_user.id}")
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error creating chat session: {str(e)}")
+        return jsonify({"error": "Chyba při vytváření relace chatu"}), 500
+    
+    return jsonify({"session_id": session_id})

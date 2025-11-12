@@ -38,6 +38,16 @@ logging.basicConfig(level=logging.INFO, handlers=[stream_handler])
 app.url_map.strict_slashes = False
 CORS(app)
 
+# Add request logging middleware
+@app.before_request
+def log_request_info():
+    app.logger.info('=' * 80)
+    app.logger.info(f'REQUEST: {request.method} {request.url}')
+    app.logger.info(f'Headers: {dict(request.headers)}')
+    app.logger.info(f'Remote Address: {request.remote_addr}')
+    app.logger.info(f'Path: {request.path}')
+    app.logger.info('=' * 80)
+
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", str(uuid.uuid4()))
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config["UPLOAD_FOLDER"] = "./app/static/uploads/"
