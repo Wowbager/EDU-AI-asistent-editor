@@ -231,25 +231,23 @@
             msgInput.focus();
             $('#customChatModal').modal('hide');
 
-            addSystemMessage("Generuji odpověď asistenta...");
+            console.log("startCustomChat: Initiating WebSocket chat setup...");
+            addSystemMessage("Připravuji chat...");
 
-            const response = await fetch("{{ url_for('roleplay.chat') }}", {
+            // Step 1: Generate session ID from Flask (same as regular roles)
+            const response = await fetch("{{ url_for('roleplay.generate_session_id') }}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     role_id: currentRoleId,
-                    message: instructions,
-                    subject: subject,
                     role_title: roleName,
-                    role_brief: roleBrief
+                    role_brief: roleBrief,
+                    subject: subject,
+                    custom_instructions: instructions
                 })
             });
-
-            // Remove the "Generuji..." message
-            const systemMessages = chatLog.querySelectorAll('.alert.alert-warning');
-            systemMessages.forEach(msg => msg.remove());
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -258,19 +256,42 @@
 
             const data = await response.json();
             currentSessionId = data.session_id;
-            addMessage('assistant', data.reply);
-            assistantMessageCount++;
+            console.log("startCustomChat: Session ID received:", currentSessionId);
+
+            // Step 2: Connect to WebSocket
+            addSystemMessage("Připojuji k chatovacímu serveru...");
+            await connectWebSocket(currentSessionId);
+            
+            // Remove setup messages
+            const systemMessages = chatLog.querySelectorAll('.alert.alert-warning');
+            systemMessages.forEach(msg => msg.remove());
+
+            console.log("startCustomChat: WebSocket connected, sending first message...");
+
+            // Step 3: Send first user message via WebSocket
+            const firstUserMessage = instructions || `Představ se mi prosím, stručně vysvětli svou specializaci a řekni, jakým stylem budeš komunikovat.`;
+            const sent = sendWebSocketMessage(firstUserMessage);
+
+            if (!sent) {
+                throw new Error('Nepodařilo se odeslat zprávu');
+            }
+
+            // Enable inputs (they'll be managed by WebSocket responses)
+            msgInput.disabled = false;
 
         } catch (error) {
-            // Ensure "Generuji..." message is removed on error too
+            // Ensure system messages are removed on error
             const systemMessages = chatLog.querySelectorAll('.alert.alert-warning');
             systemMessages.forEach(msg => msg.remove());
             addSystemMessage(`Chyba při zahájení vlastního chatu: ${error.message}`);
-        } finally {
-            // Re-enable buttons and inputs
-            startCustomChatBtnSidebar.disabled = false;
+            console.error('Error in startCustomChat:', error);
+            
+            // Re-enable buttons and inputs on error
             msgInput.disabled = false;
             sendBtn.disabled = false;
+        } finally {
+            // Re-enable start button
+            startCustomChatBtnSidebar.disabled = false;
         }
     }
 
