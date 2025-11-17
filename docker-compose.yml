@@ -170,6 +170,7 @@ services:
     restart: always
     env_file:
       - .env
+      - ./fastapi/.env
     volumes:
       - ./fastapi:/code
     networks:
@@ -178,6 +179,24 @@ services:
     ports:
       - "6767:80"
 
+  webchat:
+    build:
+      context: ./webchat
+    restart: always
+    env_file:
+      - .env
+      - ./webchat/.env
+    volumes:
+      - ./webchat:/code
+    networks:
+      - web
+      - internal
+    depends_on:
+      - redis
+      - mysql
+    ports:
+      - "7070:80"
+  
 networks:
   web:
     external: true

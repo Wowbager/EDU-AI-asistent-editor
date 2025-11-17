@@ -23,6 +23,7 @@ from app.public.forms import (
     ResetPasswordRequestForm,
 )
 import requests
+import json
 
 public = Blueprint("public", __name__)
 
@@ -129,6 +130,127 @@ def share_webchat(hash):
     <!-- Removed the old window.onload script block -->
     """
 
+
+@public.route("/dev/test/webchat/<hash>")
+def dev_test_webchat(hash):
+    try: 
+        course_id = hasher.decode(hash)[0]
+        course = Course.query.filter_by(id=course_id).first()
+        if not course:
+            raise Exception()
+    except:
+        return "course not found"
+    
+    # Use production URL by default, fall back to localhost for local dev
+    backend_url = os.environ.get("WEBCHAT_BACKEND_URL", "https://webchat.edu-ai.eu").rstrip("/")
+    
+    # Generate conversation ID server-side
+    import random
+    import string
+    conversation_id = 'test-' + ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    
+    return f"""
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>Rasa Webchat Test - {course.name} (ID: {course_id})</title>
+  </head>
+  <body>
+    <script>
+    localStorage.removeItem("chat_session");
+    !function(){{
+        let e=document.createElement("script"),t=document.head||document.getElementsByTagName("head")[0];
+        e.src="https://cdn.jsdelivr.net/npm/rasa-webchat@1.0.1/lib/index.js";
+        e.async=!0;
+        e.onload=(()=>{{
+            window.WebChat.default({{
+                customData:{{current_url:window.location.href,custom_course: {course_id}}},
+                initPayload: "/get_started",
+                socketUrl:'{backend_url}',
+                title: "{course.name}",
+                subtitle: "Test Mode - ID: {course_id}",
+                inputTextFieldHint: "",
+                customMessageDelay: (message) => {{
+                    return 750;
+                }}
+            }},null);
+
+            // Auto-open the chat widget
+            setTimeout(function() {{
+                const widgetContainer = document.querySelector(".rw-widget-container");
+                if (widgetContainer && ![...widgetContainer.classList].includes("rw-chat-open")) {{
+                    const launcher = document.querySelector('.rw-launcher');
+                    if (launcher) {{
+                        launcher.click();
+                    }}
+                }}
+            }}, 500);
+        }});
+        t.insertBefore(e,t.firstChild)
+    }}();
+    </script>
+    
+    <style>
+      body {{
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #f5f5f5;
+        background-image: url('{os.environ.get("PROJECT_URL", "")}/static/media/img/chat-background.jpg');
+        background-size: cover;
+      }}
+      
+      @media (max-width: 576px) {{
+        .rw-replies .rw-reply {{
+          font-size: 14px;
+        }}
+      }}
+      
+      @media screen and (min-width: 800px) {{
+        .rw-messages-container {{
+          height: 550px !important;
+          max-height: 65vh !important;
+        }}
+        .rw-widget-container .rw-conversation-container {{
+          width: 450px !important;
+        }}
+      }}
+      
+      .rw-conversation-container .rw-image-frame {{
+        height: auto !important;
+      }}
+      
+      .rw-conversation-container .rw-send .rw-send-icon {{
+        fill: #135afe !important;
+      }}
+      
+      .rw-messages-container {{
+        background-color: #eeeeee !important;
+        background-image: url('{os.environ.get("PROJECT_URL", "")}/static/uploads/back-tabs-250.png');
+      }}
+      
+      .rw-conversation-container .rw-response {{
+        background-color: white !important;
+        line-height: 1.5 !important;
+      }}
+      
+      .rw-conversation-container .rw-new-message {{
+        background-color: white;
+      }}
+      
+      .rw-conversation-container .rw-sender {{
+        background-color: white;
+      }}
+      
+      .rw-conversation-container .rw-send {{
+        background: white;
+      }}
+    </style>
+  </body>
+</html>
+"""
 
 @public.route("/register", methods=["GET", "POST"])
 def register():

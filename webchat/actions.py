@@ -1,11 +1,42 @@
 import asyncio
 from typing import Any, Text, Dict, List
 import json
-from rasa_sdk import Action
-from rasa_sdk.events import FollowupAction, SlotSet
-from .celery_app import trigger_intent, celery, get_db_all, get_db_row
-from .utils.rate_limiter import GlobalRateLimiter
-from .utils.llm_caller import get_llm_response
+import logging
+
+logger = logging.getLogger(__name__)
+
+try:  # pragma: no cover - optional dependency for FastAPI wrapper
+    from rasa_sdk import Action as _RasaAction
+    from rasa_sdk.events import FollowupAction as _RasaFollowupAction, SlotSet as _RasaSlotSet
+except ModuleNotFoundError:  # Lightweight fallback to avoid installing rasa_sdk
+    class Action:  # type: ignore[override]
+        def name(self) -> Text:
+            return self.__class__.__name__
+
+        async def run(self, dispatcher, tracker, domain):  # noqa: ANN001, D401
+            raise NotImplementedError("Override run() in subclasses")
+
+    class FollowupAction:  # pragma: no cover - minimal stub for beta handler
+        def __init__(self, name: Text) -> None:
+            self.name = name
+
+        def __repr__(self) -> str:  # noqa: D401
+            return f"FollowupAction(name={self.name!r})"
+
+    class SlotSet:  # pragma: no cover - minimal stub for beta handler
+        def __init__(self, key: Text, value: Any) -> None:
+            self.key = key
+            self.value = value
+
+        def __repr__(self) -> str:  # noqa: D401
+            return f"SlotSet(key={self.key!r}, value={self.value!r})"
+else:  # pragma: no cover - used inside full Rasa deployment
+    Action = _RasaAction
+    FollowupAction = _RasaFollowupAction
+    SlotSet = _RasaSlotSet
+from db_utils import get_db_all, get_db_row
+from task_scheduler import get_scheduler
+from utils.llm_caller import get_llm_response
 import datetime
 import requests
 import string
@@ -16,8 +47,6 @@ from pytz import timezone
 import time
 import urllib
 import re
-
-rate_limiter = GlobalRateLimiter()
 
 def get_next_item(item2find, list2search):
     if len(list2search) > 0:
@@ -35,8 +64,8 @@ def get_next_item(item2find, list2search):
     return None
 
 
-def get_slots(sender_id):
-    tmp_query = get_db_all(
+async def get_slots(sender_id):
+    tmp_query = await get_db_all(
         "select * from events_slots where sender_id = %s", [sender_id]
     )
 
@@ -49,25 +78,25 @@ def get_slots(sender_id):
     return slots
 
 
-def set_slot(sender_id, key2find, value2set):
-    tmp_query = get_db_row(
+async def set_slot(sender_id, key2find, value2set):
+    tmp_query = await get_db_row(
         "select id from events_slots where sender_id = %s and key2find = %s",
         [sender_id, key2find],
     )
     if tmp_query is None:
-        get_db_row(
+        await get_db_row(
             "INSERT INTO `events_slots` (`sender_id`, `key2find`) VALUES (%s, %s)",
             [sender_id, key2find],
         )
-    tmp_query2 = get_db_row(
+    tmp_query2 = await get_db_row(
         "update events_slots set value = %s where sender_id = %s and key2find = %s",
         [value2set, sender_id, key2find],
     )
     return tmp_query2
 
 
-def reset_all_slots(sender_id):
-    get_db_row("delete from events_slots where sender_id = %s", [sender_id])
+async def reset_all_slots(sender_id):
+    await get_db_row("delete from events_slots where sender_id = %s", [sender_id])
     return True
 
 
@@ -80,7 +109,7 @@ def units2seconds(unit, count):
 
     try:
         return int(unit2second[unit] * int(math.ceil(float(count))))
-    except:
+    except (KeyError, ValueError, TypeError):
         return int(1)
 
 
@@ -98,7 +127,7 @@ def date_seconds_diff(date2diff):
         if now.timestamp() > date2diff.timestamp():
             return int(1)
         return int(date2diff.timestamp() - now.timestamp())
-    except:
+    except (AttributeError, TypeError):
         return int(1)
 
 
@@ -107,44 +136,8 @@ def translate_text(translate_key):
     return translate_key
 
 
-def get_active_tasks(sender_id):
-    i = celery.control.inspect()
-    _tasks = []
-
-    for queue in i.scheduled():
-        for _task in i.scheduled()[queue]:
-            if (
-                _task
-                and _task.get("kwargs")
-                and _task.get("kwargs").get("sender_id") == sender_id
-                and _task not in _tasks
-            ):
-                _tasks.append(_task)
-
-    for queue in i.active():
-        for _task in i.active()[queue]:
-            if (
-                _task
-                and _task.get("kwargs")
-                and _task.get("kwargs").get("sender_id") == sender_id
-                and _task not in _tasks
-            ):
-                _tasks.append(_task)
-
-    for queue in i.reserved():
-        for _task in i.reserved()[queue]:
-            if (
-                _task
-                and _task.get("kwargs")
-                and _task.get("kwargs").get("sender_id") == sender_id
-                and _task not in _tasks
-            ):
-                _tasks.append(_task)
-    return _tasks
-
-
-def get_active_tasks_alt(sender_id):
-    _tasks = get_db_all(
+async def get_active_tasks_alt(sender_id):
+    _tasks = await get_db_all(
         "select task_id from planned_tasks where sender_id = %s and is_finished = 0",
         [sender_id],
     )
@@ -154,26 +147,27 @@ def get_active_tasks_alt(sender_id):
     return tasks
 
 
-def reset_all_tasks(sender_id):
-    tasks = get_active_tasks_alt(sender_id)
-    for task_id in tasks:
-        celery.control.revoke(task_id, terminate=True)
-        get_db_row(
-            "update planned_tasks set is_finished = 1 where task_id = %s", [task_id]
-        )
+async def reset_all_tasks(sender_id):
+    scheduler = get_scheduler()
+    await scheduler.cancel_all_for_sender(sender_id)
 
 
-def trigger_intent_quiz(sender_id, countdown):
-    tmp_task_id = trigger_intent.apply_async(
-        args=[{"sender_id": sender_id}], countdown=countdown
+async def trigger_intent_quiz(sender_id, countdown):
+    """Schedule a reminder task (no external notification - web-only)."""
+    # Note: In web-only mode, reminders are passive - they just mark time has passed
+    # The actual reminder would need to be checked when user next interacts
+    scheduler = get_scheduler()
+    
+    async def reminder_callback():
+        # In web-only mode, we just log that the reminder fired
+        # The user will get the next step when they send their next message
+        pass
+    
+    await scheduler.schedule_reminder(
+        sender_id, 
+        countdown, 
+        reminder_callback
     )
-    target_eta = datetime.datetime.now() + datetime.timedelta(0, countdown)
-    target_datetime = target_eta.strftime("%Y-%m-%d %H:%M:%S")
-    get_db_row(
-        "INSERT INTO `planned_tasks` (`sender_id`, `task_id`, `eta`) VALUES (%s, %s, %s)",
-        [sender_id, tmp_task_id, target_datetime],
-    )
-    return
 
 
 def sec_to_hhmmss(seconds):
@@ -188,8 +182,8 @@ def sec_to_hhmmss(seconds):
     return f"{a}:{b}:{c}"
 
 
-def get_first_eta(sender_id):
-    _planned_task = get_db_row(
+async def get_first_eta(sender_id):
+    _planned_task = await get_db_row(
         "select eta from planned_tasks where sender_id = %s and is_finished = 0 order by eta desc limit 1",
         [sender_id],
     )
@@ -200,8 +194,8 @@ def get_first_eta(sender_id):
     return sec_to_hhmmss(1)
 
 
-def get_first_task_seconds(sender_id):
-    _planned_task = get_db_row(
+async def get_first_task_seconds(sender_id):
+    _planned_task = await get_db_row(
         "select eta from planned_tasks where sender_id = %s and is_finished = 0 order by eta desc limit 1",
         [sender_id],
     )
@@ -218,8 +212,8 @@ def fix_text2send(text2send):
         if text2send not in [None, ""]:
             return text2send
         else:
-            raise Exception()
-    except:
+            raise ValueError("Empty text")
+    except (TypeError, ValueError):
         return "."
 
 
@@ -227,7 +221,7 @@ def trim_to_50(text2send):
     # telegram limit 50 chars
     try:
         return text2send[:50]
-    except:
+    except (TypeError, AttributeError):
         return ""
     
 def get_utterances(events, sender_is_user=True, message_position=0, latest_question=None):
@@ -271,7 +265,7 @@ def get_utterances(events, sender_is_user=True, message_position=0, latest_quest
                                 question["options"].append(option_text)
                             if question["options"]:
                                 message = format_question_with_buttons(question)
-                    except:
+                    except (KeyError, TypeError, AttributeError):
                         ...
                 else:
                     text = str(message) + "\n" + str(text)
@@ -309,12 +303,12 @@ class ActionQuiz(Action):
         latest_message = tracker.latest_message.get("text", "")
         sender_id = tracker.current_state()["sender_id"]
 
-        slots = get_slots(sender_id)
+        slots = await get_slots(sender_id)
 
         if latest_message == "/get_started" and slots.get("gpt_conversation", ""):
             if slots.get("conversation_started") == "1":
                 return [FollowupAction("action_listen")]
-            set_slot(sender_id, "conversation_started", "1")
+            await set_slot(sender_id, "conversation_started", "1")
         
 
         current_step = slots.get("current_step", "")
@@ -338,39 +332,39 @@ class ActionQuiz(Action):
         events = tracker.current_state()["events"]
         latest_bot_event = {}
         for e in tracker.events:
-            if e["event"] == "bot" and e["text"] != "":
+            if e.get("event") == "bot" and e.get("text", "") != "":
                 latest_bot_event = e["text"]
                 break
         user_events = []
         for e in events:
-            if e["event"] == "user" and e["text"] != "EXTERNAL: EXTERNAL_reminder":
+            if e.get("event") == "user" and e.get("text", "") != "EXTERNAL: EXTERNAL_reminder":
                 user_events.append(e)
 
         custom_course = None
         try:
             if user_events[-1]["metadata"]["custom_course"]:
                 custom_course = user_events[-1]["metadata"]["custom_course"]
-        except:
+        except (KeyError, IndexError, TypeError):
             ...
 
         if latest_message.lower() in ["reset", "restart"] and not resetted:
             dispatcher.utter_message(text=translate_text("Resetováno"))
-            reset_all_slots(sender_id)
-            reset_all_tasks(sender_id)
-            trigger_intent_quiz(sender_id, 1)
-            return [FollowupAction("action_quiz")]
+            await reset_all_slots(sender_id)
+            await reset_all_tasks(sender_id)
+            await trigger_intent_quiz(sender_id, 1)
+            return [FollowupAction("action_listen")]
         
         if latest_message.lower() == "/use_gemma":
             dispatcher.utter_message(
                 text="Nyní bude využíván model gemma3 12b. Pokud jej chcete vypnout je nutné resetovat konverzaci."
             )
-            set_slot(sender_id, "use_gemma", "1")
+            await set_slot(sender_id, "use_gemma", "1")
             return [FollowupAction("action_listen")]      
 
         # asking mff
         if "/w" in latest_message.lower() and len(latest_message) > 2 and command == "":
             message2send = latest_message.split("/w")[1]
-            set_slot(sender_id, "command", "1")
+            await set_slot(sender_id, "command", "1")
             try:
                 mffcuni = requests.post(
                     os.environ.get("MFF_URL"),
@@ -388,10 +382,10 @@ class ActionQuiz(Action):
                 mff_text = mffcuni.json().get("a", "")
                 if len(mff_text) > 0:
                     dispatcher.utter_message(text=mff_text)
-                trigger_intent_quiz(sender_id, 1)
+                await trigger_intent_quiz(sender_id, 1)
                 return [FollowupAction("action_listen")]
             except Exception as e:
-                print(e)
+                logger.exception("MFF query failed: %s", e)
                 dispatcher.utter_message(
                     text=f"Omlouvám se, část mozku mi právě nefunguje."
                 )
@@ -402,17 +396,17 @@ class ActionQuiz(Action):
                 ""
             ])
             #response = await get_llm_response(message)
-            set_slot(sender_id, "command", "1")
+            await set_slot(sender_id, "command", "1")
             dispatcher.utter_message(
                 text=f"https://ema.rvp.cz/vyhledat-material?searchForm-type=wizard&searchForm-filter[search]={urllib.parse.quote(message2send)}"
             )
-            trigger_intent_quiz(sender_id, 1)
+            await trigger_intent_quiz(sender_id, 1)
             return [FollowupAction("action_listen")]  
         
         if gpt_conversation in ["1", "edu", "max"] and latest_message != "/get_started":
             if latest_message.lower().strip() == "/model":
                 dispatcher.utter_message(
-                    text=f"Používám model: {await rate_limiter.get_model()}"
+                    text=f"Používám model: gpt-4o-mini (nebo gemma3 pokud je zapnutý)"
                 )
                 return [FollowupAction("action_listen")]
             
@@ -438,7 +432,7 @@ class ActionQuiz(Action):
                 events,
                 key=lambda d: d["timestamp"],
             )
-            initial_prompt = get_db_row(
+            initial_prompt = await get_db_row(
                 "select description from courses where id = %s", [custom_course]
             )
 
@@ -491,59 +485,60 @@ class ActionQuiz(Action):
                 dispatcher.utter_message(text=message)
             """
 
-            set_slot(sender_id, "gpt_conversation_counter", str(int(gpt_conversation_counter) + 1))
-            print(f"full timer: {round(time.time() - timer, 4)}", flush=True)
+            await set_slot(sender_id, "gpt_conversation_counter", str(int(gpt_conversation_counter) + 1))
+            logger.debug("GPT conversation timer: %.4f seconds", time.time() - timer)
             return [FollowupAction("action_listen")]
 
         # checking till pause ends
         if (
-            len(get_active_tasks_alt(sender_id)) > 0
+            len(await get_active_tasks_alt(sender_id)) > 0
             and latest_message != "EXTERNAL: EXTERNAL_reminder"
         ):
-            if get_first_task_seconds(sender_id) > 120:
+            if await get_first_task_seconds(sender_id) > 120:
                 dispatcher.utter_message(
-                    text=f"{translate_text('edu.pause_till')} {get_first_eta(sender_id)} s"
+                    text=f"{translate_text('edu.pause_till')} {await get_first_eta(sender_id)} s"
                 )
             return [FollowupAction("action_quiz")]
 
         if custom_course and current_course == "":
-            set_slot(sender_id, "current_course", custom_course)
-            course2run = get_db_row(
+            await set_slot(sender_id, "current_course", custom_course)
+            course2run = await get_db_row(
                 "select name from courses where id = %s", [custom_course]
             )
             if course2run:
-                description = get_db_row(
+                description_row = await get_db_row(
                     "select description from courses where id = %s", [custom_course]
-                ).get("description", "")
+                )
+                description = description_row.get("description", "") if description_row else ""
 
                 if "##GPT##" in description:
                     dispatcher.utter_message("Dobrý den, jak vám mohu pomoci?")
-                    set_slot(sender_id, "gpt_conversation", "1")
+                    await set_slot(sender_id, "gpt_conversation", "1")
                     return [FollowupAction("action_listen")]
                 elif "##GPT_EDU##" in description:
                     dispatcher.utter_message(
                         "Dobrý den, jak vám mohu pomoci? Neváhejte se zeptat."
                     )
-                    set_slot(sender_id, "gpt_conversation", "edu")
+                    await set_slot(sender_id, "gpt_conversation", "edu")
                     return [FollowupAction("action_listen")]
                 elif "##GPT_MAX##" in description:
                     dispatcher.utter_message(
                         "Dobrý den, jak vám mohu pomoci? Neváhejte se zeptat."
                     )
-                    set_slot(sender_id, "gpt_conversation", "max")
+                    await set_slot(sender_id, "gpt_conversation", "max")
                     return [FollowupAction("action_listen")]
                 
                 dispatcher.utter_message(
                     text=f"Spouštím kurz {course2run.get('name', '')}"
                 )
 
-                lecture2go_query = get_db_row(
+                lecture2go_query = await get_db_row(
                     "select id from lectures where course_id = %s order by position limit 1",
                     [custom_course],
                 )
 
                 if lecture2go_query:
-                    set_slot(sender_id, "current_lecture", str(lecture2go_query["id"]))
+                    await set_slot(sender_id, "current_lecture", str(lecture2go_query["id"]))
                     return [FollowupAction("action_quiz")]
                 else:
                     dispatcher.utter_message(
@@ -551,9 +546,9 @@ class ActionQuiz(Action):
                     )
                     return [FollowupAction("action_listen")]
         
-        set_slot(sender_id, "command", "")
+        await set_slot(sender_id, "command", "")
 
-        steps2go_query = get_db_all(
+        steps2go_query = await get_db_all(
             "select * from lectures_steps where parent_id = 0 and lecture_id = %s order by position",
             [lecture_id],
         )
@@ -562,7 +557,7 @@ class ActionQuiz(Action):
             for step2go in steps2go_query:
                 steps2go.append(step2go["id"])
 
-        lectures2go_query = get_db_all(
+        lectures2go_query = await get_db_all(
             "select * from lectures where course_id = %s order by position",
             [current_course],
         )
@@ -574,14 +569,14 @@ class ActionQuiz(Action):
         if current_lecture == "":
             try:
                 lecture_id = lectures2go[0]
-            except:
+            except (IndexError, TypeError):
                 dispatcher.utter_message(
                     text=translate_text("edu.no_lection_in_course")
                 )
                 lecture_id = ""
 
             if lecture_id != "":
-                set_slot(sender_id, "current_lecture", str(lecture_id))
+                await set_slot(sender_id, "current_lecture", str(lecture_id))
                 return [FollowupAction("action_quiz")]
             else:
                 return [FollowupAction("action_listen")]
@@ -591,13 +586,13 @@ class ActionQuiz(Action):
         if current_step == "":
             current_step = get_next_item(None, steps2go)
 
-        step = get_db_row(
+        step = await get_db_row(
             "select * from lectures_steps where lecture_id = %s and parent_id = 0 and id = %s order by position limit 1",
             [lecture_id, current_step],
         )
 
         if not step:
-            set_slot(sender_id, "current_step", "")
+            await set_slot(sender_id, "current_step", "")
             dispatcher.utter_message(
                 text=f"Co dál?", buttons=[{"title": "Reset", "payload": "reset"}]
             )
@@ -611,7 +606,7 @@ class ActionQuiz(Action):
             else:
                 dispatcher.utter_message(text=f"{fix_text2send(step['text'])}")
 
-            substeps = get_db_all(
+            substeps = await get_db_all(
                 "select * from lectures_steps where lecture_id = %s and parent_id = %s order by position",
                 [lecture_id, step["id"]],
             )
@@ -625,18 +620,18 @@ class ActionQuiz(Action):
                 else:
                     dispatcher.utter_message(text=f"{fix_text2send(substep['text'])}")
             if str(steps2go[-1]) == str(step["id"]):
-                set_slot(sender_id, "current_step", "")
-                set_slot(
+                await set_slot(sender_id, "current_step", "")
+                await set_slot(
                     sender_id, "current_lecture", get_next_item(lecture_id, lectures2go)
                 )
             else:
-                set_slot(sender_id, "current_step", get_next_item(step["id"], steps2go))
-                set_slot(sender_id, "being_asked", "")
+                await set_slot(sender_id, "current_step", get_next_item(step["id"], steps2go))
+                await set_slot(sender_id, "being_asked", "")
 
             return [FollowupAction("action_quiz")]
 
         elif step["response_type"] == "question":
-            answers = get_db_all(
+            answers = await get_db_all(
                 "select * from lectures_answers where step_id = %s and parent_id = 0 order by position",
                 [step["id"]],
             )
@@ -661,7 +656,7 @@ class ActionQuiz(Action):
                 if empty_text2match is True:
                     buttons = []
 
-                set_slot(sender_id, "being_asked", "1")
+                await set_slot(sender_id, "being_asked", "1")
 
                 if step.get("text3", "") not in [None, ""]:
                     dispatcher.utter_message(text=fix_text2send(step.get("text3", "")))
@@ -698,7 +693,7 @@ class ActionQuiz(Action):
                     latest_message = ""
 
                 if latest_message != "EXTERNAL: EXTERNAL_reminder":
-                    set_slot(sender_id, "latest_message2check", latest_message)
+                    await set_slot(sender_id, "latest_message2check", latest_message)
                 else:
                     latest_message = latest_message2check
 
@@ -715,14 +710,14 @@ class ActionQuiz(Action):
                 else:
                     selected_answer = None
                     if str(steps2go[-1]) == str(step["id"]):
-                        set_slot(sender_id, "current_step", "")
-                        set_slot(
+                        await set_slot(sender_id, "current_step", "")
+                        await set_slot(
                             sender_id,
                             "current_lecture",
                             get_next_item(lecture_id, lectures2go),
                         )
                     else:
-                        set_slot(
+                        await set_slot(
                             sender_id,
                             "current_step",
                             get_next_item(step["id"], steps2go),
@@ -731,7 +726,7 @@ class ActionQuiz(Action):
                 if selected_answer is not None:
                     if selected_answer["id"] not in delayed_answers:
                         delayed_answers.append(selected_answer["id"])
-                        set_slot(
+                        await set_slot(
                             sender_id,
                             "delayed_answers",
                             json.dumps(delayed_answers),
@@ -758,7 +753,7 @@ class ActionQuiz(Action):
                                 "hours",
                                 "days",
                             ]:
-                                trigger_intent_quiz(
+                                await trigger_intent_quiz(
                                     sender_id,
                                     units2seconds(
                                         selected_answer["text2"],
@@ -767,14 +762,14 @@ class ActionQuiz(Action):
                                 )
                                 return [FollowupAction("action_listen")]
 
-                    subanswers = get_db_all(
+                    subanswers = await get_db_all(
                         "select * from lectures_answers where parent_id = %s and step_id = %s order by position",
                         [selected_answer["id"], step["id"]],
                     )
                     for subanswer in subanswers:
                         if subanswer["id"] not in delayed_answers:
                             delayed_answers.append(subanswer["id"])
-                            set_slot(
+                            await set_slot(
                                 sender_id,
                                 "delayed_answers",
                                 json.dumps(delayed_answers),
@@ -801,7 +796,7 @@ class ActionQuiz(Action):
                                     "hours",
                                     "days",
                                 ]:
-                                    trigger_intent_quiz(
+                                    await trigger_intent_quiz(
                                         sender_id,
                                         units2seconds(
                                             subanswer["text2"], subanswer["description"]
@@ -809,21 +804,21 @@ class ActionQuiz(Action):
                                     )
                                     return [FollowupAction("action_listen")]
 
-                    set_slot(sender_id, "delayed_answers", "")
-                    set_slot(sender_id, "being_asked", "")
-                    set_slot(sender_id, "latest_message2check", "")
-                    set_slot(sender_id, "delayed_selected_answers", "")
+                    await set_slot(sender_id, "delayed_answers", "")
+                    await set_slot(sender_id, "being_asked", "")
+                    await set_slot(sender_id, "latest_message2check", "")
+                    await set_slot(sender_id, "delayed_selected_answers", "")
 
                     if selected_answer["following_action"] == "next":
                         if str(steps2go[-1]) == str(step["id"]):
-                            set_slot(sender_id, "current_step", "")
-                            set_slot(
+                            await set_slot(sender_id, "current_step", "")
+                            await set_slot(
                                 sender_id,
                                 "current_lecture",
                                 get_next_item(lecture_id, lectures2go),
                             )
                         else:
-                            set_slot(
+                            await set_slot(
                                 sender_id,
                                 "current_step",
                                 get_next_item(step["id"], steps2go),
@@ -832,7 +827,7 @@ class ActionQuiz(Action):
                     elif selected_answer["following_action"] == "again":
                         ...
                     elif selected_answer["following_action"] == "lecture":
-                        _lecture = get_db_row(
+                        _lecture = await get_db_row(
                             "select * from lectures where id = %s order by id limit 1",
                             [selected_answer["following_action_id"]],
                         )
@@ -842,16 +837,16 @@ class ActionQuiz(Action):
                             )
                             return [FollowupAction("action_listen")]
 
-                        set_slot(
+                        await set_slot(
                             sender_id,
                             "current_lecture",
                             selected_answer["following_action_id"],
                         )
-                        set_slot(sender_id, "current_step", "")
-                        set_slot(sender_id, "number_tries", "")
+                        await set_slot(sender_id, "current_step", "")
+                        await set_slot(sender_id, "number_tries", "")
 
                     elif selected_answer["following_action"] == "course":
-                        _course = get_db_row(
+                        _course = await get_db_row(
                             "select * from courses where id = %s order by id limit 1",
                             [selected_answer["following_action_id"]],
                         )
@@ -861,20 +856,24 @@ class ActionQuiz(Action):
                             )
                             return [FollowupAction("action_listen")]
 
-                        set_slot(sender_id, "current_lecture", "")
-                        set_slot(sender_id, "current_step", "")
-                        set_slot(
+                        await set_slot(sender_id, "current_lecture", "")
+                        await set_slot(sender_id, "current_step", "")
+                        await set_slot(
                             sender_id,
                             "current_course",
                             selected_answer["following_action_id"],
                         )
-                        set_slot(sender_id, "number_tries", "")
+                        await set_slot(sender_id, "number_tries", "")
                     else:
-                        set_slot(
+                        await set_slot(
                             sender_id,
                             "current_step",
                             selected_answer["following_action_id"],
                         )
+                    
+                    # Continue with the next step after processing the answer
+                    return [FollowupAction("action_quiz")]
+                    
                 else:
                     try:
                         _sorted_events = sorted(
@@ -919,8 +918,8 @@ class ActionQuiz(Action):
                             response = await get_llm_response(message=None, chat=prompt, use_gemma=True, utter_message_sender=dispatcher.utter_message)
                         else:
                             response = await get_llm_response(message)
-                        print(f"full timer: {round(time.time() - timer, 4)}", flush=True)
-                        print(f"openai response: {response}", flush=True)
+                        logger.debug("AI response timer: %.4f seconds", time.time() - timer)
+                        logger.debug("AI response: %s", response[:100] if response else None)
 
                                                 # ...existing code...
                         
@@ -933,12 +932,12 @@ class ActionQuiz(Action):
                             # Process the selected payload
                             if selected_payload:
                                 latest_message = selected_payload
-                                print(f"selected_payload: {selected_payload}", flush=True)
-                                set_slot(sender_id, "latest_message2check", latest_message)
+                                logger.debug("Selected payload: %s", selected_payload)
+                                await set_slot(sender_id, "latest_message2check", latest_message)
                                                         
                             # Evaluate the latest_message like a button payload
                             if latest_message != "EXTERNAL: EXTERNAL_reminder":
-                                set_slot(sender_id, "latest_message2check", latest_message)
+                                await set_slot(sender_id, "latest_message2check", latest_message)
                             else:
                                 latest_message = latest_message2check
                             
@@ -955,14 +954,14 @@ class ActionQuiz(Action):
                             else:
                                 selected_answer = None
                                 if str(steps2go[-1]) == str(step["id"]):
-                                    set_slot(sender_id, "current_step", "")
-                                    set_slot(
+                                    await set_slot(sender_id, "current_step", "")
+                                    await set_slot(
                                         sender_id,
                                         "current_lecture",
                                         get_next_item(lecture_id, lectures2go),
                                     )
                                 else:
-                                    set_slot(
+                                    await set_slot(
                                         sender_id,
                                         "current_step",
                                         get_next_item(step["id"], steps2go),
@@ -971,7 +970,7 @@ class ActionQuiz(Action):
                             if selected_answer is not None:
                                 if selected_answer["id"] not in delayed_answers:
                                     delayed_answers.append(selected_answer["id"])
-                                    set_slot(
+                                    await set_slot(
                                         sender_id,
                                         "delayed_answers",
                                         json.dumps(delayed_answers),
@@ -998,7 +997,7 @@ class ActionQuiz(Action):
                                             "hours",
                                             "days",
                                         ]:
-                                            trigger_intent_quiz(
+                                            await trigger_intent_quiz(
                                                 sender_id,
                                                 units2seconds(
                                                     selected_answer["text2"],
@@ -1007,14 +1006,14 @@ class ActionQuiz(Action):
                                             )
                                             return [FollowupAction("action_listen")]
                             
-                                subanswers = get_db_all(
+                                subanswers = await get_db_all(
                                     "select * from lectures_answers where parent_id = %s and step_id = %s order by position",
                                     [selected_answer["id"], step["id"]],
                                 )
                                 for subanswer in subanswers:
                                     if subanswer["id"] not in delayed_answers:
                                         delayed_answers.append(subanswer["id"])
-                                        set_slot(
+                                        await set_slot(
                                             sender_id,
                                             "delayed_answers",
                                             json.dumps(delayed_answers),
@@ -1041,7 +1040,7 @@ class ActionQuiz(Action):
                                                 "hours",
                                                 "days",
                                             ]:
-                                                trigger_intent_quiz(
+                                                await trigger_intent_quiz(
                                                     sender_id,
                                                     units2seconds(
                                                         subanswer["text2"], subanswer["description"]
@@ -1049,21 +1048,21 @@ class ActionQuiz(Action):
                                                 )
                                                 return [FollowupAction("action_listen")]
                             
-                                set_slot(sender_id, "delayed_answers", "")
-                                set_slot(sender_id, "being_asked", "")
-                                set_slot(sender_id, "latest_message2check", "")
-                                set_slot(sender_id, "delayed_selected_answers", "")
+                                await set_slot(sender_id, "delayed_answers", "")
+                                await set_slot(sender_id, "being_asked", "")
+                                await set_slot(sender_id, "latest_message2check", "")
+                                await set_slot(sender_id, "delayed_selected_answers", "")
                             
                                 if selected_answer["following_action"] == "next":
                                     if str(steps2go[-1]) == str(step["id"]):
-                                        set_slot(sender_id, "current_step", "")
-                                        set_slot(
+                                        await set_slot(sender_id, "current_step", "")
+                                        await set_slot(
                                             sender_id,
                                             "current_lecture",
                                             get_next_item(lecture_id, lectures2go),
                                         )
                                     else:
-                                        set_slot(
+                                        await set_slot(
                                             sender_id,
                                             "current_step",
                                             get_next_item(step["id"], steps2go),
@@ -1072,7 +1071,7 @@ class ActionQuiz(Action):
                                 elif selected_answer["following_action"] == "again":
                                     ...
                                 elif selected_answer["following_action"] == "lecture":
-                                    _lecture = get_db_row(
+                                    _lecture = await get_db_row(
                                         "select * from lectures where id = %s order by id limit 1",
                                         [selected_answer["following_action_id"]],
                                     )
@@ -1082,16 +1081,16 @@ class ActionQuiz(Action):
                                         )
                                         return [FollowupAction("action_listen")]
 
-                                    set_slot(
+                                    await set_slot(
                                         sender_id,
                                         "current_lecture",
                                         selected_answer["following_action_id"],
                                     )
-                                    set_slot(sender_id, "current_step", "")
-                                    set_slot(sender_id, "number_tries", "")
+                                    await set_slot(sender_id, "current_step", "")
+                                    await set_slot(sender_id, "number_tries", "")
 
                                 elif selected_answer["following_action"] == "course":
-                                    _course = get_db_row(
+                                    _course = await get_db_row(
                                         "select * from courses where id = %s order by id limit 1",
                                         [selected_answer["following_action_id"]],
                                     )
@@ -1101,16 +1100,16 @@ class ActionQuiz(Action):
                                         )
                                         return [FollowupAction("action_listen")]
 
-                                    set_slot(sender_id, "current_lecture", "")
-                                    set_slot(sender_id, "current_step", "")
-                                    set_slot(
+                                    await set_slot(sender_id, "current_lecture", "")
+                                    await set_slot(sender_id, "current_step", "")
+                                    await set_slot(
                                         sender_id,
                                         "current_course",
                                         selected_answer["following_action_id"],
                                     )
-                                    set_slot(sender_id, "number_tries", "")
+                                    await set_slot(sender_id, "number_tries", "")
                                 else:
-                                    set_slot(
+                                    await set_slot(
                                         sender_id,
                                         "current_step",
                                         selected_answer["following_action_id"],
@@ -1119,8 +1118,8 @@ class ActionQuiz(Action):
                         
                         dispatcher.utter_message(response)
                     except Exception as e:
-                        print(f"openai handling error: {e}", flush=True)
-                        print(f"Exception type: {type(e)}", flush=True)
+                        logger.exception("AI processing error: %s", e)
+                        response = None  # Set response to None on error
                         dispatcher.utter_message(
                             "Omlouvám se, část mozku mi právě nefunguje."
                         )
@@ -1133,13 +1132,13 @@ class ActionQuiz(Action):
                             )
 
                             dispatcher.utter_message(mffcuni.json().get("a", ""))
-                        except:
+                        except (requests.RequestException, KeyError, ValueError):
                             dispatcher.utter_message(
                                 "Omlouvám se, část mozku mi právě nefunguje."
                             )
 
-                    set_slot(sender_id, "being_asked", "")
-                    set_slot(sender_id, "number_tries", number_tries)
+                    await set_slot(sender_id, "being_asked", "")
+                    await set_slot(sender_id, "number_tries", number_tries)
 
                 return [FollowupAction("action_quiz")]
 
@@ -1155,17 +1154,17 @@ class ActionQuiz(Action):
                     seconds2set = units2seconds(step["text2"], step["text"])
 
             if step["text2"] == "still":
-                set_slot(sender_id, "current_step", get_next_item(step["id"], steps2go))
+                await set_slot(sender_id, "current_step", get_next_item(step["id"], steps2go))
 
                 if str(steps2go[-1]) == str(step["id"]):
                     print("next lecture", flush=True)
-                    set_slot(sender_id, "current_step", "")
-                    set_slot(
+                    await set_slot(sender_id, "current_step", "")
+                    await set_slot(
                         sender_id,
                         "current_lecture",
                         get_next_item(lecture_id, lectures2go),
                     )
-                    trigger_intent_quiz(sender_id, 1)
+                    await trigger_intent_quiz(sender_id, 1)
                 return [
                     SlotSet(
                         "lecture_step",
@@ -1181,15 +1180,15 @@ class ActionQuiz(Action):
                     seconds2set = 2
 
             if str(steps2go[-1]) == str(step["id"]):
-                set_slot(sender_id, "current_step", "")
-                set_slot(
+                await set_slot(sender_id, "current_step", "")
+                await set_slot(
                     sender_id, "current_lecture", get_next_item(lecture_id, lectures2go)
                 )
             else:
-                set_slot(sender_id, "current_step", get_next_item(step["id"], steps2go))
-                set_slot(sender_id, "being_asked", "")
+                await set_slot(sender_id, "current_step", get_next_item(step["id"], steps2go))
+                await set_slot(sender_id, "being_asked", "")
 
-            trigger_intent_quiz(sender_id, seconds2set)
+            await trigger_intent_quiz(sender_id, seconds2set)
             return [
                 SlotSet(
                     "lecture_step",

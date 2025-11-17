@@ -1,0 +1,1 @@
+"""Webchat beta FastAPI service."""

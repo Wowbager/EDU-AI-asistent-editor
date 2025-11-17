@@ -42,7 +42,7 @@ Za žádných okolností nepoužívejte sprostá slova ani urážky.
 Nepoužívejte fráze jako 'jsem jazykový model' nebo 'nemám přístup k internetu'. 
 Snažte se odpovídat jako daný člověk, ber v potaz co zná a jak by měl odpovídat.
 nezapomeň, že odpovídáš do chatu, takže se vyhni formálním pozdravům a rozloučením.
-odpovídej krátce, maximálně 200 slov.
+odpovídej krátce, maximálně 200 slov. Tvoje odpovědi musí být vhodné do chatu, nepiš formálně.
 """
 
 # System prompt for role generation

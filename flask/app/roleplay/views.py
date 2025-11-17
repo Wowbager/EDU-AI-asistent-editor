@@ -26,7 +26,8 @@ from .chat_utils import (
 from .ai_prompts import (
     create_roleplay_system_prompt,
     prepare_session_prompts,
-    ROLE_GENERATION_SYSTEM_PROMPT
+    ROLE_GENERATION_SYSTEM_PROMPT,
+    GENERAL_INSTRUCTIONS
 )
 from .config import (
     COMPETITION_RUNNING,
@@ -1433,8 +1434,8 @@ def generate_session_id():
     role_title = data.get("role_title", "")
     role_brief = data.get("role_brief", "")
     subject = data.get("subject", "")
-    custom_instructions = data.get("custom_instructions", "")
-    
+    user_custom_instructions = data.get("custom_instructions", "")
+
     if not role_id:
         return jsonify({"error": "Chybějící povinné pole: role_id"}), 400
     
@@ -1443,8 +1444,21 @@ def generate_session_id():
         role_title=role_title,
         role_description=role_brief,
         subject=subject,
-        custom_instructions=custom_instructions
+        custom_instructions=user_custom_instructions
     )
+    
+    # Prepare messages in LangChain native format (array of message dicts)
+    # Only include system messages - frontend will send the first user message
+    messages = [
+        {
+            "role": "system",
+            "content": prompts['system_prompt']
+        },
+        {
+            "role": "system", 
+            "content": prompts['general_info']
+        }
+    ]
     
     # Prepare role information for FastAPI
     role_information = {
@@ -1454,9 +1468,7 @@ def generate_session_id():
             "title": role_title,
             "description": role_brief
         },
-        "system_prompt": prompts['system_prompt'],
-        "general_info": prompts['general_info'],
-        "subject": subject
+        "messages": messages  # LangChain-ready messages
     }
     
     # Generate session ID and store in Redis

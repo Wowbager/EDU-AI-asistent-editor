@@ -103,8 +103,12 @@ class Lecture(db.Model):
         "Step", backref="step", lazy=True, cascade="all, delete-orphan"
     )
     last_edited = db.Column(db.DateTime)
-    position = db.Column(db.Integer, default=0, nullable=False)
-    course_id = db.Column(db.Integer, db.ForeignKey("courses.id"), nullable=True)
+    position = db.Column(db.Integer, default=0, nullable=False, index=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("courses.id"), nullable=True, index=True)
+
+    __table_args__ = (
+        db.Index("ix_lectures_course_position", "course_id", "position"),
+    )
 
     def copy(self):
         new = Lecture()
@@ -152,12 +156,17 @@ class Step(db.Model):
     text = db.Column(LONGTEXT)
     text2 = db.Column(LONGTEXT)
     text3 = db.Column(LONGTEXT, default="")
-    parent_id = db.Column(db.Integer)
-    lecture_id = db.Column(db.Integer, db.ForeignKey("lectures.id"), nullable=False)
+    parent_id = db.Column(db.Integer, index=True)
+    lecture_id = db.Column(db.Integer, db.ForeignKey("lectures.id"), nullable=False, index=True)
     answers = db.relationship(
         "Answer", backref="answer", lazy=True, cascade="all, delete-orphan"
     )
-    position = db.Column(db.Integer, default=0, nullable=False)
+    position = db.Column(db.Integer, default=0, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_steps_lecture_parent", "lecture_id", "parent_id"),
+        db.Index("ix_steps_lecture_position", "lecture_id", "position"),
+    )
 
     def copy(self):
         new = Step()
@@ -181,17 +190,21 @@ class Answer(db.Model):
     __tablename__ = "lectures_answers"
 
     id = db.Column(db.Integer, primary_key=True)
-    step_id = db.Column(db.Integer, db.ForeignKey("lectures_steps.id"))
+    step_id = db.Column(db.Integer, db.ForeignKey("lectures_steps.id"), index=True)
     text2match = db.Column(LONGTEXT)
     description = db.Column(LONGTEXT)
     answer_type = db.Column(db.String(255))
     text = db.Column(LONGTEXT)
     text2 = db.Column(LONGTEXT)
-    parent_id = db.Column(db.Integer)
+    parent_id = db.Column(db.Integer, index=True)
     correct_answer = db.Column(db.Boolean, default=False)
     following_action = db.Column(db.String(255), default="")
     following_action_id = db.Column(db.String(255), default="")
-    position = db.Column(db.Integer, default=0, nullable=False)
+    position = db.Column(db.Integer, default=0, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_answers_step_position", "step_id", "position"),
+    )
 
     def copy(self):
         new = Answer()
@@ -214,9 +227,14 @@ class EventsSlot(db.Model):
     __tablename__ = "events_slots"
 
     id = db.Column(db.Integer, primary_key=True)
-    sender_id = db.Column(db.String(255), default="")
+    sender_id = db.Column(db.String(255), default="", index=True)
     key2find = db.Column(db.String(255), default="")
     value = db.Column(db.Text(), default="")
+
+    __table_args__ = (
+        db.Index("ix_events_slots_sender_key", "sender_id", "key2find"),
+        db.UniqueConstraint("sender_id", "key2find", name="uk_sender_key"),
+    )
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
@@ -228,10 +246,14 @@ class PlannedTask(db.Model):
     __tablename__ = "planned_tasks"
 
     id = db.Column(db.Integer, primary_key=True)
-    task_id = db.Column(db.String(255))
-    sender_id = db.Column(db.String(255))
+    task_id = db.Column(db.String(255), index=True)
+    sender_id = db.Column(db.String(255), index=True)
     eta = db.Column(db.DateTime)
-    is_finished = db.Column(db.Boolean, default=0)
+    is_finished = db.Column(db.Boolean, default=0, index=True)
+
+    __table_args__ = (
+        db.Index("ix_planned_tasks_sender_finished", "sender_id", "is_finished"),
+    )
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():

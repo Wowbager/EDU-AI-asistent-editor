@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .database import async_session_maker
 from .models import ChatSession, ChatMessage
-from .ai_config import AIModelConfig, PromptTemplates, MessageFilter
+from .ai_config import AIModelConfig
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -51,15 +51,6 @@ model = ChatOpenAI(
 MAX_ASSISTANT_RESPONSES = AIModelConfig.MAX_ASSISTANT_RESPONSES
 MAX_MESSAGE_LENGTH = AIModelConfig.MAX_MESSAGE_LENGTH
 MAX_FIRST_MESSAGE_LENGTH = AIModelConfig.MAX_FIRST_MESSAGE_LENGTH
-
-
-def prepare_messages_for_ai(messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
-    """
-    Prepare messages for OpenAI API by filtering.
-    Uses centralized MessageFilter from ai_config module.
-    """
-    return MessageFilter.prepare_messages_for_ai(messages)
-
 
 
 async def save_chat_to_database(
@@ -130,7 +121,7 @@ async def roleplay_websocket(websocket: WebSocket, session_id: str):
     
     Flow:
     1. Validate session exists in Redis (30s window from Flask)
-    2. Load initial chat data (user_id, role, prompts)
+    2. Load initial messages (already in LangChain format from Flask)
     3. Accept WebSocket connection
     4. Process messages up to MAX_ASSISTANT_RESPONSES
     5. Save to database after each assistant response
@@ -163,16 +154,15 @@ async def roleplay_websocket(websocket: WebSocket, session_id: str):
             await websocket.close(code=1008, reason="Invalid session data")
             return
         
-        # Initialize messages with system prompts
-        system_prompt = chat_data.get("system_prompt", "")
-        general_info = chat_data.get("general_info", "")
+        # Load messages prepared by Flask (already in LangChain format!)
+        messages = chat_data.get("messages", [])
         
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        if general_info:
-            messages.append({"role": "system", "content": general_info})
+        if not messages:
+            logger.error(f"Session {session_id} has no initial messages")
+            await websocket.close(code=1008, reason="Invalid session data")
+            return
         
-        logger.info(f"Session {session_id} initialized for user {user_id}, role {role_id}")
+        logger.info(f"Session {session_id} initialized for user {user_id}, role {role_id} with {len(messages)} initial messages")
         
         # 3. Accept WebSocket connection
         await websocket.accept()
@@ -183,25 +173,10 @@ async def roleplay_websocket(websocket: WebSocket, session_id: str):
             "message": "Připojeno k chatovacímu serveru"
         })
         
-        # 4. Chat loop
+        # 4. Chat loop - wait for frontend to trigger first message
         while True:
             try:
-                # Receive user message
-                user_message = await websocket.receive_text()
-                
-                # Validate message length
-                user_message_count = len([m for m in messages if m["role"] == "user"])
-                is_first_user_message = user_message_count == 0
-                max_length = MAX_FIRST_MESSAGE_LENGTH if is_first_user_message else MAX_MESSAGE_LENGTH
-                
-                if len(user_message) > max_length:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": f"Zpráva je příliš dlouhá (max {max_length} znaků)"
-                    })
-                    continue
-                
-                # Check if limit reached before processing
+                # Check if limit reached before accepting more messages
                 if assistant_message_count >= MAX_ASSISTANT_RESPONSES:
                     await websocket.send_json({
                         "type": "limit_reached",
@@ -209,6 +184,17 @@ async def roleplay_websocket(websocket: WebSocket, session_id: str):
                     })
                     await websocket.close(code=1000, reason="Message limit reached")
                     break
+                
+                # Receive user message
+                user_message = await websocket.receive_text()
+                
+                # Validate message length
+                if len(user_message) > MAX_MESSAGE_LENGTH:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Zpráva je příliš dlouhá (max {MAX_MESSAGE_LENGTH} znaků)"
+                    })
+                    continue
                 
                 # Add user message to history
                 messages.append({
@@ -225,11 +211,8 @@ async def roleplay_websocket(websocket: WebSocket, session_id: str):
                     "message": "Generuji odpověď..."
                 })
                 
-                # Prepare messages for AI (filter according to rules)
-                ai_messages = prepare_messages_for_ai(messages)
-                
-                # Call OpenAI API
-                response = await model.ainvoke(ai_messages)
+                # Call OpenAI API - use messages directly (already in correct format)
+                response = await model.ainvoke(messages)
                 assistant_content = response.content
                 
                 # Add assistant response to history

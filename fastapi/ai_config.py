@@ -13,7 +13,7 @@ class AIModelConfig:
     """Configuration for AI models used in the application"""
     
     # Primary chat model
-    CHAT_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4.1')
+    CHAT_MODEL = os.getenv('OPENAI_MODEL', 'gpt-5.1')
     CHAT_TEMPERATURE = float(os.getenv('CHAT_TEMPERATURE', '0.7'))
     CHAT_MAX_TOKENS = int(os.getenv('CHAT_MAX_TOKENS', '500'))
     
@@ -42,7 +42,7 @@ class PromptTemplates:
 
 DŮLEŽITÉ ZÁSADY:
 - Nepoužívejte markdown nebo formátování
-- Odpovědi musí být stručné, maximálně 200 slov
+- Odpovědi musí být stručné, maximálně 200 slov, moc se nerozepisuj
 - Za žádných okolností nepoužívejte sprostá slova ani urážky
 - Nepoužívejte fráze jako "jsem jazykový model" nebo "nemám přístup k internetu"
 - Snažte se odpovídat jako daná osoba/role, vezměte v úvahu co zná a jak by měl odpovídat
@@ -136,63 +136,6 @@ PŘÍKLAD pro 'Starověký Řím':
   {"id": "cicero", "title": "Cicero", "brief": "Římský řečník, odhalil Catilinu spiknutí."},
   {"id": "spartacus", "title": "Spartacus", "brief": "Gladiátor, vedl povstání otroků proti Římu."}
 ]"""
-
-
-# ==================== MESSAGE FILTERING ====================
-
-class MessageFilter:
-    """Utilities for filtering and preparing messages for AI"""
-    
-    @staticmethod
-    def prepare_messages_for_ai(messages: list) -> list:
-        """
-        Prepare chat history for OpenAI API by filtering messages.
-        
-        Filters out:
-        - All but the first system message
-        - The first user message (which contains custom instructions)
-        - Timestamp fields (OpenAI doesn't need them)
-        
-        Args:
-            messages: List of message dictionaries with 'role' and 'content'
-        
-        Returns:
-            Filtered list of messages ready for OpenAI API
-        """
-        if not messages:
-            return []
-        
-        filtered_messages = []
-        system_message_added = False
-        user_message_count = 0
-        
-        for msg in messages:
-            role = msg.get('role')
-            
-            # Keep only the first system message
-            if role == 'system':
-                if not system_message_added:
-                    filtered_messages.append({
-                        "role": msg.get('role'),
-                        "content": msg.get('content')
-                    })
-                    system_message_added = True
-                continue
-            
-            # Skip the first user message (custom instructions)
-            if role == 'user':
-                user_message_count += 1
-                if user_message_count == 1:
-                    continue
-            
-            # Include all other messages (subsequent user messages and all assistant messages)
-            if role in ['user', 'assistant']:
-                filtered_messages.append({
-                    "role": msg.get('role'),
-                    "content": msg.get('content')
-                })
-        
-        return filtered_messages
 
 
 # ==================== RESPONSE VALIDATION ====================
