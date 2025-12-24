@@ -141,14 +141,14 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-danger" id="deleteFlagBtn" style="display: none; margin-right: auto;">
-                        <i class="fas fa-trash"></i> Odstranit označení
+                        <i class="fas fa-trash me-2"></i> Odstranit označení
                     </button>
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
                     <button type="button" class="btn btn-warning" id="confirmFlagBtn">
-                        <i class="fas fa-flag"></i> Uložit
+                        <i class="fas fa-flag me-2"></i> Uložit
                     </button>
                 </div>
-                        <i class="fas fa-flag"></i> Označit zprávu
+                        <i class="fas fa-flag me-2"></i> Označit zprávu
                     </button>
                 </div>
             </div>
@@ -232,7 +232,7 @@
                                 <p style="white-space: pre-wrap; word-break: break-word; margin-bottom: 0;">${escapeHtml(message.content)}</p>
                                 ${sessionData.is_public && flagInfo && flagInfo.summary ? `
                                     <div class="alert alert-warning mt-2 mb-0" style="padding: 0.5rem 0.75rem;">
-                                        <small><strong><i class="fas fa-flag me-1"></i>Důvod označení:</strong> ${escapeHtml(flagInfo.summary)}</small>
+                                        <small><strong><i class="fas fa-flag me-2"></i>Důvod označení:</strong> ${escapeHtml(flagInfo.summary)}</small>
                                     </div>
                                 ` : ''}
                                 ${!isUser && !sessionData.is_public ? `
@@ -242,14 +242,14 @@
                                                     data-session-id="${sessionId}"
                                                     data-content="${escapeHtml(message.content)}"
                                                     title="Odznačit tuto zprávu">
-                                                <i class="fas fa-flag"></i> Označeno
+                                                <i class="fas fa-flag me-2"></i> Označeno
                                             </button>
                                         ` : `
                                             <button class="btn btn-sm btn-outline-secondary flag-btn" 
                                                     data-session-id="${sessionId}"
                                                     data-content="${escapeHtml(message.content)}"
                                                     title="Označit tuto zprávu">
-                                                <i class="far fa-flag"></i> Označit
+                                                <i class="far fa-flag me-2"></i> Označit
                                             </button>
                                         `}
                                     </div>

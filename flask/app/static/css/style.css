@@ -1001,7 +1001,7 @@ a.choosecompany:hover {
     }
 
     .layout .content .chat .chat-header .chat-header-user figure {
-        margin-right: 10px;
+        margin-inline: 10px;
     }
 }
 
@@ -1150,4 +1150,8 @@ body.modal-open .layout {
 
 .me-2 {
     margin-inline-end: 0.5rem;
+}
+
+.me-3 {
+    margin-inline-end: 0.75rem;
 }

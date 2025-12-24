@@ -2,22 +2,29 @@
     <div class="chat-header">
         <div class="chat-header-user">
             <button id="new-chat-btn" class="btn btn-outline-light">
-                <i class="fas fa-plus"></i> Nový chat
+                <i class="fas fa-plus me-2"></i> Nový chat
             </button>
             <div id="role-display" class="text-white mx-3"></div>
-            <button id="direct-custom-chat-btn-header" class="btn btn-outline-light d-md-none">
-                <i class="fas fa-magic"></i> Vlastní
+            <button
+                id="direct-custom-chat-btn-header"
+                class="btn btn-outline-light d-md-none"
+            >
+                <i class="fas fa-magic me-2"></i> Vlastní
             </button>
         </div>
     </div>
-    <div class="chat-body" style="display: none;" id="chat-body-content">
+    <div class="chat-body" style="display: none" id="chat-body-content">
         <div id="chat-log"></div>
     </div>
-    <div class="chat-body" id="chat-placeholder" style="display: flex;">
+    <div class="chat-body" id="chat-placeholder" style="display: flex">
         <div class="no-message-container">
             <div class="row my-5">
                 <div class="col-md-4 offset-4">
-                    <img src="/static/media/svg/undraw_empty_xct9.svg" class="img-fluid" alt="image">
+                    <img
+                        src="/static/media/svg/undraw_empty_xct9.svg"
+                        class="img-fluid"
+                        alt="image"
+                    />
                 </div>
             </div>
             <div class="row my-5">
@@ -27,21 +34,38 @@
             </div>
         </div>
     </div>
-    <div class="chat-footer" style="display: none;" id="chat-footer-content">
+    <div class="chat-footer" style="display: none" id="chat-footer-content">
         <div id="chat-input-group">
-            <textarea id="msg-input" class="form-control" rows="1" placeholder="Napište zprávu... (max 1000 znaků)"></textarea>
+            <textarea
+                id="msg-input"
+                class="form-control"
+                rows="1"
+                placeholder="Napište zprávu... (max 1000 znaků)"
+            ></textarea>
             <div class="form-buttons">
                 <button id="send-btn" class="btn btn-primary">
-                    <i class="fas fa-paper-plane"></i> Odeslat
+                    <i class="fas fa-paper-plane me-2"></i> Odeslat
                 </button>
-                <button id="clear-btn" class="btn btn-outline-secondary d-none d-md-inline-block">
-                    <i class="fas fa-eraser"></i> Vymazat
+                <button
+                    id="clear-btn"
+                    class="btn btn-outline-secondary d-none d-md-inline-block"
+                >
+                    <i class="fas fa-eraser me-2"></i> Vymazat
                 </button>
             </div>
         </div>
-        <div id="char-counter" class="text-muted small mt-1 text-end">0/1000 znaků</div>
-        <div id="processing-indicator" class="text-center mt-2" style="display: none;">
-            <div class="spinner-border spinner-border-sm text-primary" role="status">
+        <div id="char-counter" class="text-muted small mt-1 text-end">
+            0/1000 znaků
+        </div>
+        <div
+            id="processing-indicator"
+            class="text-center mt-2"
+            style="display: none"
+        >
+            <div
+                class="spinner-border spinner-border-sm text-primary"
+                role="status"
+            >
                 <span class="sr-only">Loading...</span>
             </div>
             <span class="text-muted small ms-2">Zpracovávám zprávu...</span>
@@ -49,18 +73,39 @@
     </div>
 </div>
 
-<div class="alert alert-success" id="flag-alert" style="display: none; position: fixed; top: 20px; right: 20px; z-index: 1050;">
-</div>
+<div
+    class="alert alert-success"
+    id="flag-alert"
+    style="
+        display: none;
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1050;
+    "
+></div>
 
 <!-- AI Generated Roles Modal -->
-<div class="modal fade" id="aiRolesModal" tabindex="-1" role="dialog" aria-labelledby="aiRolesModalLabel" aria-hidden="true">
+<div
+    class="modal fade"
+    id="aiRolesModal"
+    tabindex="-1"
+    role="dialog"
+    aria-labelledby="aiRolesModalLabel"
+    aria-hidden="true"
+>
     <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="aiRolesModalLabel">
                     <i class="fas fa-robot me-2"></i>AI vygenerované role
                 </h5>
-                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                <button
+                    type="button"
+                    class="close text-white"
+                    data-dismiss="modal"
+                    aria-label="Close"
+                >
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
@@ -69,31 +114,48 @@
                     <label for="ai-subject-input" class="form-label fw-bold">
                         <i class="fas fa-book me-2"></i>Předmět / Oblast:
                     </label>
-                    <input type="text" class="form-control" id="ai-subject-input" placeholder="Např. fyzika, historie, literatura" maxlength="100">
-                    <small class="form-text text-muted">Zadejte oblast, pro kterou chcete vygenerovat role.</small>
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="ai-subject-input"
+                        placeholder="Např. fyzika, historie, literatura"
+                        maxlength="100"
+                    />
+                    <small class="form-text text-muted"
+                        >Zadejte oblast, pro kterou chcete vygenerovat
+                        role.</small
+                    >
                 </div>
-                
+
                 <button class="btn btn-primary w-100 mb-3" id="fetch-roles-btn">
-                    <i class="fas fa-robot"></i> Vygenerovat role pomocí AI
+                    <i class="fas fa-robot me-2"></i> Vygenerovat role pomocí AI
                 </button>
-                
-                <div id="roles-container" style="display: none;">
+
+                <div id="roles-container" style="display: none">
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
-                        <strong>Vyberte roli:</strong> AI vygenerovalo tyto role na základě zadaného předmětu.
+                        <strong>Vyberte roli:</strong> AI vygenerovalo tyto role
+                        na základě zadaného předmětu.
                     </div>
                     <div class="form-group mb-3">
-                        <label for="role-select" class="form-label fw-bold">Dostupné role:</label>
+                        <label for="role-select" class="form-label fw-bold"
+                            >Dostupné role:</label
+                        >
                         <select class="form-control" id="role-select"></select>
                     </div>
                     <button class="btn btn-primary w-100" id="start-btn">
-                        <i class="fas fa-rocket"></i> Začít chat s vybranou rolí
+                        <i class="fas fa-rocket me-2"></i> Začít chat s vybranou
+                        rolí
                     </button>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">
-                    <i class="fas fa-times"></i> Zavřít
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary"
+                    data-dismiss="modal"
+                >
+                    <i class="fas fa-times me-2"></i> Zavřít
                 </button>
             </div>
         </div>
@@ -101,61 +163,112 @@
 </div>
 
 <!-- Flag Summary Modal -->
-<div class="modal fade" id="flagSummaryModal" tabindex="-1" role="dialog" aria-labelledby="flagSummaryModalLabel" aria-hidden="true">
+<div
+    class="modal fade"
+    id="flagSummaryModal"
+    tabindex="-1"
+    role="dialog"
+    aria-labelledby="flagSummaryModalLabel"
+    aria-hidden="true"
+>
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="flagSummaryModalLabel">
                     <i class="fas fa-flag me-2"></i>Shrnutí úlovku
                 </h5>
-                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Zavřít">
+                <button
+                    type="button"
+                    class="close text-white"
+                    data-dismiss="modal"
+                    aria-label="Zavřít"
+                >
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle me-2"></i>
-                    <strong>Popište svůj úlovek</strong> - Popište čím je zajímavý nebo špatně.
+                    <strong>Popište svůj úlovek</strong> - Popište čím je
+                    zajímavý nebo špatně.
                 </div>
                 <div class="form-group mb-3">
-                    <label for="flag-summary-input" class="form-label fw-bold">Shrnutí problému:</label>
-                    <textarea id="flag-summary-input" class="form-control" rows="3" placeholder="Zadej shrnutí (max 250 znaků)" maxlength="250"></textarea>
-                    <small id="flag-summary-char-counter" class="form-text text-muted">0/250 znaků</small>
+                    <label for="flag-summary-input" class="form-label fw-bold"
+                        >Shrnutí problému:</label
+                    >
+                    <textarea
+                        id="flag-summary-input"
+                        class="form-control"
+                        rows="3"
+                        placeholder="Zadej shrnutí (max 250 znaků)"
+                        maxlength="250"
+                    ></textarea>
+                    <small
+                        id="flag-summary-char-counter"
+                        class="form-text text-muted"
+                        >0/250 znaků</small
+                    >
                 </div>
 
                 {% if user_teams and user_teams|length > 0 %}
                 <div class="form-group mb-3">
                     <label for="flag-team-select" class="form-label fw-bold">
-                        <i class="fas fa-users me-2"></i>Zveřejnit pod týmem (volitelné):
+                        <i class="fas fa-users me-2"></i>Zveřejnit pod týmem
+                        (volitelné):
                     </label>
                     <select id="flag-team-select" class="form-control">
-                        <option value="">Nezveřejňovat pod týmem (osobní úlovek)</option>
+                        <option value="">
+                            Nezveřejňovat pod týmem (osobní úlovek)
+                        </option>
                         {% for team in user_teams %}
-                            <option value="{{ team.id }}"{% if loop.first %} selected{% endif %}>{{ team.name }}</option>
+                        <option
+                            value="{{ team.id }}"
+                            {%
+                            if
+                            loop.first
+                            %}
+                            selected{%
+                            endif
+                            %}
+                        >
+                            {{ team.name }}
+                        </option>
                         {% endfor %}
                     </select>
                 </div>
                 {% endif %}
-                
+
                 <div class="form-group form-check">
-                    <input type="checkbox" class="form-check-input" id="flag-is-public-check" checked>
+                    <input
+                        type="checkbox"
+                        class="form-check-input"
+                        id="flag-is-public-check"
+                        checked
+                    />
                     <label class="form-check-label" for="flag-is-public-check">
                         <i class="fas fa-globe me-2"></i>Zveřejnit tento úlovek
                     </label>
                     <small class="form-text text-muted">
-                        {% if user_teams and user_teams|length > 0 %}
-                        Pokud není zveřejněno pod týmem, toto učiní tvůj osobní úlovek viditelným pro ostatní.
-                        {% else %}
-                        Toto učiní tvůj osobní úlovek viditelným pro ostatní.
-                        {% endif %}
+                        {% if user_teams and user_teams|length > 0 %} Pokud není
+                        zveřejněno pod týmem, toto učiní tvůj osobní úlovek
+                        viditelným pro ostatní. {% else %} Toto učiní tvůj
+                        osobní úlovek viditelným pro ostatní. {% endif %}
                     </small>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary"
+                    data-dismiss="modal"
+                >
                     <i class="fas fa-times"></i> Zrušit
                 </button>
-                <button type="button" class="btn btn-primary" id="submit-flag-summary-btn">
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="submit-flag-summary-btn"
+                >
                     <i class="fas fa-flag"></i> Odeslat úlovek
                 </button>
             </div>

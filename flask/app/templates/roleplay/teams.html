@@ -1,22 +1,29 @@
-{% extends "base.html" %}
-
-{% block title %}Správa týmů{% endblock %}
-
-{% block content %}
+{% extends "base.html" %} {% block title %}Správa týmů{% endblock %} {% block
+content %}
 <body>
     <div class="layout">
         <div class="content">
             {% include "roleplay/_roleplay_navbar.html" %}
-            
+
             <div class="sidebar-group">
                 <!-- Sidebar for team navigation and filters -->
                 <div id="teams" class="sidebar active">
                     <header>
                         <div class="d-flex align-items-center">
-                            <button class="btn btn-outline-light mobile-navigation-button mr-3 d-xl-none d-inline">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round">
+                            <button
+                                class="btn btn-outline-light mobile-navigation-button mr-3 d-xl-none d-inline"
+                            >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
                                     <line x1="3" y1="12" x2="21" y2="12"></line>
                                     <line x1="3" y1="6" x2="21" y2="6"></line>
                                     <line x1="3" y1="18" x2="21" y2="18"></line>
@@ -26,60 +33,100 @@
                         </div>
                         <ul class="list-inline">
                             <li class="list-inline-item">
-                                <a class="btn btn-outline-light" id="create-team-btn" title="Vytvořit nový tým">
+                                <a
+                                    class="btn btn-outline-light"
+                                    id="create-team-btn"
+                                    title="Vytvořit nový tým"
+                                >
                                     <i data-feather="plus-circle"></i>
                                 </a>
                             </li>
                         </ul>
                     </header>
-                    
+
                     <form>
-                        <input type="text" class="form-control" id="search-teams" placeholder="Hledat v týmech">
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="search-teams"
+                            placeholder="Hledat v týmech"
+                        />
                     </form>
-                    
+
                     <div class="sidebar-body scroller">
                         <ul class="list-group list-group-flush" id="teams-list">
                             <!-- Pending Invites Section -->
                             {% if pending_invitations_count > 0 %}
                             <li class="list-group-item team-section-header">
-                                <small class="text-muted text-uppercase fw-bold">
-                                    <i class="fas fa-envelope me-2"></i>Pozvánky ({{ pending_invitations_count }})
-                                    <span class="badge bg-primary ms-2">{{ pending_invitations_count }}</span>
+                                <small
+                                    class="text-muted text-uppercase fw-bold"
+                                >
+                                    <i class="fas fa-envelope me-2"></i>Pozvánky
+                                    ({{ pending_invitations_count }})
+                                    <span class="badge bg-primary ms-2"
+                                        >{{ pending_invitations_count }}</span
+                                    >
                                 </small>
                             </li>
-                            <li class="list-group-item team-item" id="view-pending-invites-btn" data-team-id="pending" data-team-type="pending">
+                            <li
+                                class="list-group-item team-item"
+                                id="view-pending-invites-btn"
+                                data-team-id="pending"
+                                data-team-type="pending"
+                            >
                                 <figure class="avatar">
-                                    <span class="avatar-title rounded-circle bg-warning">
+                                    <span
+                                        class="avatar-title rounded-circle bg-warning"
+                                    >
                                         <i class="fas fa-envelope-open"></i>
                                     </span>
                                 </figure>
                                 <div class="users-list-body">
                                     <div>
                                         <h5>Zobrazit pozvánky</h5>
-                                        <p class="text-truncate">Máte {{ pending_invitations_count }} čekající{{ 'ch' if pending_invitations_count > 1 else '' }} pozvánek</p>
+                                        <p class="text-truncate">
+                                            Máte {{ pending_invitations_count }}
+                                            čekající{{ 'ch' if
+                                            pending_invitations_count > 1 else
+                                            '' }} pozvánek
+                                        </p>
                                     </div>
                                 </div>
                             </li>
                             {% endif %}
-                            
+
                             <!-- User's Teams Section -->
                             {% if user_teams|length > 0 %}
                             <li class="list-group-item team-section-header">
-                                <small class="text-muted text-uppercase fw-bold">
-                                    <i class="fas fa-user-check me-2"></i>Moje týmy ({{ user_teams|length }})
+                                <small
+                                    class="text-muted text-uppercase fw-bold"
+                                >
+                                    <i class="fas fa-user-check me-2"></i>Moje
+                                    týmy ({{ user_teams|length }})
                                 </small>
                             </li>
                             {% for team in user_teams %}
-                            <li class="list-group-item team-item" data-team-id="{{ team.id }}" data-team-type="my-team">
+                            <li
+                                class="list-group-item team-item"
+                                data-team-id="{{ team.id }}"
+                                data-team-type="my-team"
+                            >
                                 <figure class="avatar">
-                                    <span class="avatar-title rounded-circle" style="background-color: #0a80ff">
+                                    <span
+                                        class="avatar-title rounded-circle"
+                                        style="background-color: #0a80ff"
+                                    >
                                         <i class="fas fa-users"></i>
                                     </span>
                                 </figure>
                                 <div class="users-list-body">
                                     <div>
                                         <h5>{{ team.name }}</h5>
-                                        <p class="text-truncate">{{ (team.display_description if team.display_description else "Tento tým nemá popis.")[:50] }}...</p>
+                                        <p class="text-truncate">
+                                            {{ (team.display_description if
+                                            team.display_description else "Tento
+                                            tým nemá popis.")[:50] }}...
+                                        </p>
                                     </div>
                                     <div class="users-list-action">
                                         <small class="text-muted">
@@ -88,39 +135,49 @@
                                     </div>
                                 </div>
                             </li>
-                            {% endfor %}
-                            {% endif %}
-                            
+                            {% endfor %} {% endif %}
+
                             <!-- All Teams Section -->
                             {% if all_teams|length > 0 %}
                             <li class="list-group-item team-section-header">
-                                <small class="text-muted text-uppercase fw-bold">
-                                    <i class="fas fa-globe me-2"></i>Všechny týmy ({{ all_teams|length }})
+                                <small
+                                    class="text-muted text-uppercase fw-bold"
+                                >
+                                    <i class="fas fa-globe me-2"></i>Všechny
+                                    týmy ({{ all_teams|length }})
                                 </small>
                             </li>
-                            {% for team in all_teams %}
-                                {% if team not in user_teams %}
-                                <li class="list-group-item team-item" data-team-id="{{ team.id }}" data-team-type="other-team">
-                                    <figure class="avatar">
-                                        <span class="avatar-title rounded-circle bg-secondary">
-                                            <i class="fas fa-users"></i>
-                                        </span>
-                                    </figure>
-                                    <div class="users-list-body">
-                                        <div>
-                                            <h5>{{ team.name }}</h5>
-                                            <p class="text-truncate">{{ (team.display_description if team.display_description else "Tento tým nemá popis.")[:50] }}...</p>
-                                        </div>
-                                        <div class="users-list-action">
-                                            <small class="text-muted">
-                                                {{ team.members.count() }} členů
-                                            </small>
-                                        </div>
+                            {% for team in all_teams %} {% if team not in
+                            user_teams %}
+                            <li
+                                class="list-group-item team-item"
+                                data-team-id="{{ team.id }}"
+                                data-team-type="other-team"
+                            >
+                                <figure class="avatar">
+                                    <span
+                                        class="avatar-title rounded-circle bg-secondary"
+                                    >
+                                        <i class="fas fa-users"></i>
+                                    </span>
+                                </figure>
+                                <div class="users-list-body">
+                                    <div>
+                                        <h5>{{ team.name }}</h5>
+                                        <p class="text-truncate">
+                                            {{ (team.display_description if
+                                            team.display_description else "Tento
+                                            tým nemá popis.")[:50] }}...
+                                        </p>
                                     </div>
-                                </li>
-                                {% endif %}
-                            {% endfor %}
-                            {% else %}
+                                    <div class="users-list-action">
+                                        <small class="text-muted">
+                                            {{ team.members.count() }} členů
+                                        </small>
+                                    </div>
+                                </div>
+                            </li>
+                            {% endif %} {% endfor %} {% else %}
                             <li class="list-group-item text-center text-muted">
                                 <p class="my-4">Zatím neexistují žádné týmy</p>
                             </li>
@@ -129,21 +186,31 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="chat" id="team-content">
                 <div class="chat-header">
                     <div class="chat-header-user">
-                        <a class="btn btn-outline-light" href="javascript:void(0);" id="back2teams">
+                        <a
+                            class="btn btn-outline-light"
+                            href="javascript:void(0);"
+                            id="back2teams"
+                        >
                             <i class="fas fa-arrow-left"></i>
                         </a>
                         <figure class="avatar">
-                            <span class="avatar-title rounded-circle" style="background-color: #0a80ff">
+                            <span
+                                class="avatar-title rounded-circle"
+                                style="background-color: #0a80ff"
+                            >
                                 <i class="fas fa-users"></i>
                             </span>
                         </figure>
                         <div>
                             <h5 id="team-title">Vyberte tým</h5>
-                            <span class="text-muted small" id="team-subtitle">Klikněte na tým v levém panelu pro zobrazení detailů</span>
+                            <span class="text-muted small" id="team-subtitle"
+                                >Klikněte na tým v levém panelu pro zobrazení
+                                detailů</span
+                            >
                         </div>
                     </div>
                     <div class="d-flex">
@@ -151,86 +218,131 @@
                         <div id="team-actions"></div>
                     </div>
                 </div>
-                
+
                 <div class="chat-body">
                     <div class="no-message-container" id="no-team-selected">
                         <div class="row my-5">
                             <div class="col-md-4 offset-md-4">
-                                <img src="/static/media/svg/undraw_empty_xct9.svg" class="img-fluid" alt="Vyberte tým">
+                                <img
+                                    src="/static/media/svg/undraw_empty_xct9.svg"
+                                    class="img-fluid"
+                                    alt="Vyberte tým"
+                                />
                             </div>
                         </div>
                         <div class="row my-5">
                             <div class="col-md-4 offset-md-4 text-center">
                                 <p class="lead">Vyberte tým ze seznamu</p>
-                                <p class="text-muted">Klikněte na tým v levém panelu pro zobrazení podrobných informací</p>
+                                <p class="text-muted">
+                                    Klikněte na tým v levém panelu pro zobrazení
+                                    podrobných informací
+                                </p>
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Team details container (hidden initially) -->
-                    <div class="container-fluid p-4" id="team-details" style="display: none;">
+                    <div
+                        class="container-fluid p-4"
+                        id="team-details"
+                        style="display: none"
+                    >
                         <!-- Team info section -->
                         <div class="card mb-4 shadow-sm">
                             <div class="card-header bg-primary text-white">
                                 <h5 class="mb-0">
-                                    <i class="fas fa-info-circle me-2"></i>Informace o týmu
+                                    <i class="fas fa-info-circle me-2"></i
+                                    >Informace o týmu
                                 </h5>
                             </div>
                             <div class="card-body">
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <h6 class="text-muted">Název týmu</h6>
-                                        <p id="detail-team-name" class="mb-0 fw-bold">-</p>
+                                        <p
+                                            id="detail-team-name"
+                                            class="mb-0 fw-bold"
+                                        >
+                                            -
+                                        </p>
                                     </div>
                                     <div class="col-md-6 mb-3">
-                                        <h6 class="text-muted">Datum vytvoření</h6>
-                                        <p id="detail-team-created" class="mb-0">-</p>
+                                        <h6 class="text-muted">
+                                            Datum vytvoření
+                                        </h6>
+                                        <p
+                                            id="detail-team-created"
+                                            class="mb-0"
+                                        >
+                                            -
+                                        </p>
                                     </div>
                                     <div class="col-md-12 mb-3">
                                         <h6 class="text-muted">Popis</h6>
-                                        <p id="detail-team-description" class="mb-0">-</p>
+                                        <p
+                                            id="detail-team-description"
+                                            class="mb-0"
+                                        >
+                                            -
+                                        </p>
                                     </div>
                                     <div class="col-md-6">
                                         <h6 class="text-muted">Počet členů</h6>
-                                        <p id="detail-team-members-count" class="mb-0">-</p>
+                                        <p
+                                            id="detail-team-members-count"
+                                            class="mb-0"
+                                        >
+                                            -
+                                        </p>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Team members section -->
                         <div class="card mb-4 shadow-sm" id="team-members-card">
                             <div class="card-header bg-info text-white">
                                 <h5 class="mb-0">
-                                    <i class="fas fa-users me-2"></i>Členové týmu
+                                    <i class="fas fa-users me-2"></i>Členové
+                                    týmu
                                 </h5>
                             </div>
                             <div class="card-body">
                                 <div id="team-members-list">
-                                    <p class="text-muted text-center">Načítání...</p>
+                                    <p class="text-muted text-center">
+                                        Načítání...
+                                    </p>
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Pending invitations section (only for creators) -->
-                        <div class="card mb-4 shadow-sm" id="team-pending-invites-card" style="display: none;">
+                        <div
+                            class="card mb-4 shadow-sm"
+                            id="team-pending-invites-card"
+                            style="display: none"
+                        >
                             <div class="card-header bg-warning text-dark">
                                 <h5 class="mb-0">
-                                    <i class="fas fa-envelope me-2"></i>Čekající pozvánky
+                                    <i class="fas fa-envelope me-2"></i>Čekající
+                                    pozvánky
                                 </h5>
                             </div>
                             <div class="card-body">
                                 <div id="team-pending-invites-list">
-                                    <p class="text-muted text-center">Načítání...</p>
+                                    <p class="text-muted text-center">
+                                        Načítání...
+                                    </p>
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Team statistics section -->
                         <div class="card shadow-sm">
                             <div class="card-header bg-success text-white">
                                 <h5 class="mb-0">
-                                    <i class="fas fa-chart-bar me-2"></i>Statistiky týmu
+                                    <i class="fas fa-chart-bar me-2"></i
+                                    >Statistiky týmu
                                 </h5>
                             </div>
                             <div class="card-body">
@@ -238,14 +350,32 @@
                                     <div class="row text-center">
                                         <div class="col-md-6">
                                             <div class="p-3">
-                                                <h2 id="stats-member-count" class="mb-2 text-primary">-</h2>
-                                                <p class="text-muted mb-0 small">Počet členů</p>
+                                                <h2
+                                                    id="stats-member-count"
+                                                    class="mb-2 text-primary"
+                                                >
+                                                    -
+                                                </h2>
+                                                <p
+                                                    class="text-muted mb-0 small"
+                                                >
+                                                    Počet členů
+                                                </p>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="p-3">
-                                                <h2 id="stats-flagged-count" class="mb-2 text-warning">-</h2>
-                                                <p class="text-muted mb-0 small">Označené zprávy</p>
+                                                <h2
+                                                    id="stats-flagged-count"
+                                                    class="mb-2 text-warning"
+                                                >
+                                                    -
+                                                </h2>
+                                                <p
+                                                    class="text-muted mb-0 small"
+                                                >
+                                                    Označené zprávy
+                                                </p>
                                             </div>
                                         </div>
                                     </div>
@@ -257,34 +387,71 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Modals -->
     <!-- Create Team Modal -->
-    <div class="modal fade" id="createTeamModal" tabindex="-1" aria-hidden="true">
+    <div
+        class="modal fade"
+        id="createTeamModal"
+        tabindex="-1"
+        aria-hidden="true"
+    >
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
                         <i class="fas fa-plus-circle me-2"></i>Vytvořit nový tým
                     </h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <button
+                        type="button"
+                        class="close"
+                        data-dismiss="modal"
+                        aria-label="Close"
+                    >
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group mb-3">
-                        <label for="new-team-name">Název týmu <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="new-team-name" placeholder="Např. Team Alpha" maxlength="100" required>
+                        <label for="new-team-name"
+                            >Název týmu
+                            <span class="text-danger">*</span></label
+                        >
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="new-team-name"
+                            placeholder="Např. Team Alpha"
+                            maxlength="100"
+                            required
+                        />
                         <small class="text-muted">Maximálně 100 znaků</small>
                     </div>
                     <div class="form-group mb-3">
                         <label for="new-team-description">Popis týmu</label>
-                        <textarea class="form-control" id="new-team-description" rows="3" placeholder="Volitelný popis týmu..."></textarea>
+                        <textarea
+                            class="form-control"
+                            id="new-team-description"
+                            rows="3"
+                            placeholder="Volitelný popis týmu..."
+                        ></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
-                    <button type="button" class="btn btn-primary" id="confirm-create-team">Vytvořit tým</button>
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-dismiss="modal"
+                    >
+                        Zrušit
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        id="confirm-create-team"
+                    >
+                        Vytvořit tým
+                    </button>
                 </div>
             </div>
         </div>
@@ -298,106 +465,218 @@
                     <h5 class="modal-title">
                         <i class="fas fa-edit me-2"></i>Upravit tým
                     </h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <button
+                        type="button"
+                        class="close"
+                        data-dismiss="modal"
+                        aria-label="Close"
+                    >
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group mb-3">
-                        <label for="edit-team-name">Název týmu <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="edit-team-name" maxlength="100" required>
+                        <label for="edit-team-name"
+                            >Název týmu
+                            <span class="text-danger">*</span></label
+                        >
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="edit-team-name"
+                            maxlength="100"
+                            required
+                        />
                     </div>
                     <div class="form-group mb-3">
                         <label for="edit-team-description">Popis týmu</label>
-                        <textarea class="form-control" id="edit-team-description" rows="3"></textarea>
+                        <textarea
+                            class="form-control"
+                            id="edit-team-description"
+                            rows="3"
+                        ></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
-                    <button type="button" class="btn btn-primary" id="confirm-edit-team">Uložit změny</button>
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-dismiss="modal"
+                    >
+                        Zrušit
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        id="confirm-edit-team"
+                    >
+                        Uložit změny
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Delete Team Modal -->
-    <div class="modal fade" id="deleteTeamModal" tabindex="-1" aria-hidden="true">
+    <div
+        class="modal fade"
+        id="deleteTeamModal"
+        tabindex="-1"
+        aria-hidden="true"
+    >
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header bg-danger text-white">
                     <h5 class="modal-title">
-                        <i class="fas fa-exclamation-triangle me-2"></i>Smazat tým?
+                        <i class="fas fa-exclamation-triangle me-2"></i>Smazat
+                        tým?
                     </h5>
-                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <button
+                        type="button"
+                        class="close text-white"
+                        data-dismiss="modal"
+                        aria-label="Close"
+                    >
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
                 <div class="modal-body">
-                    <p>Opravdu chcete smazat tým "<strong id="delete-team-name"></strong>"?</p>
+                    <p>
+                        Opravdu chcete smazat tým "<strong
+                            id="delete-team-name"
+                        ></strong
+                        >"?
+                    </p>
                     <div class="alert alert-warning">
                         <i class="fas fa-exclamation-circle me-2"></i>
-                        <strong>Varování:</strong> Tato akce je nevratná. Všichni členové budou odstraněni a všechny pozvánky budou zrušeny.
+                        <strong>Varování:</strong> Tato akce je nevratná.
+                        Všichni členové budou odstraněni a všechny pozvánky
+                        budou zrušeny.
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
-                    <button type="button" class="btn btn-danger" id="confirm-delete-team">Smazat tým</button>
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-dismiss="modal"
+                    >
+                        Zrušit
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-danger"
+                        id="confirm-delete-team"
+                    >
+                        Smazat tým
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Invite Members Modal -->
-    <div class="modal fade" id="inviteMembersModal" tabindex="-1" aria-hidden="true">
+    <div
+        class="modal fade"
+        id="inviteMembersModal"
+        tabindex="-1"
+        aria-hidden="true"
+    >
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
                         <i class="fas fa-envelope me-2"></i>Pozvat členy
                     </h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <button
+                        type="button"
+                        class="close"
+                        data-dismiss="modal"
+                        aria-label="Close"
+                    >
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group mb-3">
-                        <label>Emailové adresy <span class="text-danger">*</span></label>
+                        <label
+                            >Emailové adresy
+                            <span class="text-danger">*</span></label
+                        >
                         <div id="email-inputs">
                             <div class="input-group mb-2">
-                                <input type="email" class="form-control invite-email" placeholder="email@example.com">
+                                <input
+                                    type="email"
+                                    class="form-control invite-email"
+                                    placeholder="email@example.com"
+                                />
                                 <div class="input-group-append">
-                                    <button class="btn btn-outline-danger remove-email-btn" type="button" style="display:none;">
+                                    <button
+                                        class="btn btn-outline-danger remove-email-btn"
+                                        type="button"
+                                        style="display: none"
+                                    >
                                         <i class="fas fa-times"></i>
                                     </button>
                                 </div>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="add-email-btn">
-                            <i class="fas fa-plus me-1"></i>Přidat další email
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-primary"
+                            id="add-email-btn"
+                        >
+                            <i class="fas fa-plus me-2"></i>Přidat další email
                         </button>
                     </div>
                     <div class="form-group mb-3">
                         <label for="invite-message">Zpráva (volitelné)</label>
-                        <textarea class="form-control" id="invite-message" rows="3" placeholder="Připojte se k našemu týmu!"></textarea>
+                        <textarea
+                            class="form-control"
+                            id="invite-message"
+                            rows="3"
+                            placeholder="Připojte se k našemu týmu!"
+                        ></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
-                    <button type="button" class="btn btn-primary" id="confirm-invite-members">Odeslat pozvánky</button>
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-dismiss="modal"
+                    >
+                        Zrušit
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        id="confirm-invite-members"
+                    >
+                        Odeslat pozvánky
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Pending Invitations View Modal -->
-    <div class="modal fade" id="pendingInvitesModal" tabindex="-1" aria-hidden="true">
+    <div
+        class="modal fade"
+        id="pendingInvitesModal"
+        tabindex="-1"
+        aria-hidden="true"
+    >
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
                         <i class="fas fa-envelope-open me-2"></i>Vaše pozvánky
                     </h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <button
+                        type="button"
+                        class="close"
+                        data-dismiss="modal"
+                        aria-label="Close"
+                    >
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
@@ -412,683 +691,683 @@
 </body>
 
 <script>
-// Team data storage
-let teamsData = {
-    userTeams: {{ user_teams_json|tojson|safe }},
-    allTeams: {{ all_teams_json|tojson|safe }}
-};
+    // Team data storage
+    let teamsData = {
+        userTeams: {{ user_teams_json|tojson|safe }},
+        allTeams: {{ all_teams_json|tojson|safe }}
+    };
 
-// Currently selected team
-let selectedTeamId = null;
+    // Currently selected team
+    let selectedTeamId = null;
 
-// DOM Elements
-const teamItems = document.querySelectorAll('.team-item');
-const teamDetails = document.getElementById('team-details');
-const noTeamSelected = document.getElementById('no-team-selected');
-const teamTitle = document.getElementById('team-title');
-const teamSubtitle = document.getElementById('team-subtitle');
-const searchInput = document.getElementById('search-teams');
+    // DOM Elements
+    const teamItems = document.querySelectorAll('.team-item');
+    const teamDetails = document.getElementById('team-details');
+    const noTeamSelected = document.getElementById('no-team-selected');
+    const teamTitle = document.getElementById('team-title');
+    const teamSubtitle = document.getElementById('team-subtitle');
+    const searchInput = document.getElementById('search-teams');
 
-// Initialize feather icons
-if (typeof feather !== 'undefined') {
-    feather.replace();
-}
-
-// Team item click handler
-teamItems.forEach(item => {
-    item.addEventListener('click', function() {
-        const teamId = this.getAttribute('data-team-id');
-        
-        // Handle special case for pending invites
-        if (teamId === 'pending') {
-            selectTeam('pending');
-        } else {
-            selectTeam(parseInt(teamId));
-        }
-        
-        // Update active state in sidebar
-        teamItems.forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-        
-        // Show chat (CSS handles mobile/desktop differences)
-        $('.chat').addClass('open');
-    });
-});
-
-// Select and display team details
-function selectTeam(teamId) {
-    selectedTeamId = teamId;
-    
-    // Find team data
-    const team = findTeamById(teamId);
-    
-    if (!team) {
-        console.error('Team not found:', teamId);
-        return;
+    // Initialize feather icons
+    if (typeof feather !== 'undefined') {
+        feather.replace();
     }
-    
-    // Hide no-team-selected, show team-details
-    noTeamSelected.style.display = 'none';
-    teamDetails.style.display = 'block';
-    
-    // Update header
-    teamTitle.textContent = team.name;
-    teamSubtitle.textContent = team.members ? team.members.length + ' členů' : '0 členů';
-    
-    // Update team info
-    document.getElementById('detail-team-name').textContent = team.name;
-    document.getElementById('detail-team-description').textContent = team.display_description || 'Tento tým nemá popis.';
-    document.getElementById('detail-team-created').textContent = team.created_at ? formatDate(team.created_at) : 'Neznámé';
-    document.getElementById('detail-team-members-count').textContent = team.members ? team.members.length : 0;
-    
-    // Update statistics
-    document.getElementById('stats-member-count').textContent = team.member_count || (team.members ? team.members.length : 0);
-    document.getElementById('stats-flagged-count').textContent = team.flagged_responses_count || 0;
-    
-    // Display team members
-    displayTeamMembers(team);
-}
 
-// Find team by ID
-function findTeamById(teamId) {
-    for (let team of teamsData.userTeams) {
-        if (team.id === teamId) return team;
-    }
-    for (let team of teamsData.allTeams) {
-        if (team.id === teamId) return team;
-    }
-    return null;
-}
-
-// Display team members
-function displayTeamMembers(team) {
-    const membersList = document.getElementById('team-members-list');
-    const membersCard = document.getElementById('team-members-card');
-    
-    // Hide the entire members card if user is not a member
-    if (!team.is_member) {
-        membersCard.style.display = 'none';
-        return;
-    }
-    
-    // Show the card if user is a member
-    membersCard.style.display = 'block';
-    
-    if (!team.members || team.members.length === 0) {
-        membersList.innerHTML = '<p class="text-muted text-center">Tento tým nemá žádné členy.</p>';
-        return;
-    }
-    
-    let membersHtml = '<div class="list-group list-group-flush">';
-    team.members.forEach((member, index) => {
-        const memberName = member.name || 'Neznámý člen';
-        const firstLetter = memberName[0].toUpperCase();
-        const displayName = member.email || memberName;
-        const isCurrentUser = member.id === {{ current_user.id }};
-        
-        // Show remove button only for creators and not for themselves
-        const showRemoveBtn = team.is_creator && !isCurrentUser;
-        
-        membersHtml += `
-            <div class="list-group-item">
-                <div class="d-flex align-items-center justify-content-between">
-                    <div class="d-flex align-items-center">
-                        <figure class="avatar me-3">
-                            <span class="avatar-title rounded-circle" style="background-color: ${getColorForIndex(index)}">
-                                ${firstLetter}
-                            </span>
-                        </figure>
-                        <div>
-                            <h6 class="mb-0">${displayName}</h6>
-                            <small class="text-muted">${isCurrentUser ? 'Vy' : 'Člen týmu'}</small>
-                        </div>
-                    </div>
-                    ${showRemoveBtn ? `
-                        <button class="btn btn-sm btn-outline-danger" onclick="removeMember(${team.id}, ${member.id}, '${displayName}')">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    ` : ''}
-                </div>
-            </div>
-        `;
-    });
-    membersHtml += '</div>';
-    
-    membersList.innerHTML = membersHtml;
-}
-
-// Remove member function
-async function removeMember(teamId, userId, userName) {
-    if (!confirm(`Opravdu chcete odstranit člena "${userName}" z týmu?`)) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/soutez/teams/${teamId}/remove_member/${userId}`, {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(data.message, 'success');
-            setTimeout(() => location.reload(), 800);
-        } else {
-            showToast(data.error, 'error');
-        }
-    } catch (error) {
-        showToast('Chyba při odstraňování člena', 'error');
-        console.error(error);
-    }
-}
-
-// Generate color for member avatar
-function getColorForIndex(index) {
-    const colors = ['#0a80ff', '#ff6b6b', '#51cf66', '#ffd43b', '#9775fa', '#20c997', '#ff8787'];
-    return colors[index % colors.length];
-}
-
-// Format date
-function formatDate(dateString) {
-    if (!dateString) return 'Neznámé';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('cs-CZ', { year: 'numeric', month: 'long', day: 'numeric' });
-}
-
-// Search functionality
-searchInput.addEventListener('input', function(e) {
-    const searchTerm = e.target.value.toLowerCase();
-    
+    // Team item click handler
     teamItems.forEach(item => {
-        const teamName = item.querySelector('h5').textContent.toLowerCase();
-        const teamDescription = item.querySelector('p').textContent.toLowerCase();
-        
-        if (teamName.includes(searchTerm) || teamDescription.includes(searchTerm)) {
-            item.style.display = '';
-        } else {
-            item.style.display = 'none';
-        }
-    });
-});
+        item.addEventListener('click', function() {
+            const teamId = this.getAttribute('data-team-id');
 
-// Back button for mobile
-document.getElementById('back2teams')?.addEventListener('click', function() {
-    $('.chat').removeClass('open');
-    document.querySelectorAll('.list-group-item').forEach(item => item.classList.remove('active'));
-});
+            // Handle special case for pending invites
+            if (teamId === 'pending') {
+                selectTeam('pending');
+            } else {
+                selectTeam(parseInt(teamId));
+            }
 
-// ================== TEAM MANAGEMENT FUNCTIONS ==================
+            // Update active state in sidebar
+            teamItems.forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
 
-// Update team actions based on user role
-function updateTeamActions(team) {
-    const teamActions = document.getElementById('team-actions');
-    if (!team) {
-        teamActions.innerHTML = '';
-        return;
-    }
-    
-    let actionsHtml = '';
-    
-    if (team.is_creator) {
-        // Creator actions
-        actionsHtml = `
-            <button class="btn btn-sm btn-outline-primary mr-2" onclick="openInviteModal(${team.id})">
-                <i class="fas fa-user-plus"></i> Pozvat
-            </button>
-            <button class="btn btn-sm btn-outline-secondary mr-2" onclick="openEditTeamModal(${team.id})">
-                <i class="fas fa-edit"></i> Upravit
-            </button>
-            <button class="btn btn-sm btn-outline-danger" onclick="openDeleteTeamModal(${team.id})">
-                <i class="fas fa-trash"></i> Smazat
-            </button>
-        `;
-    } else if (team.is_member) {
-        // Member actions (non-creator)
-        actionsHtml = `
-            <button class="btn btn-sm btn-outline-warning" onclick="leaveTeam(${team.id})">
-                <i class="fas fa-sign-out-alt"></i> Opustit tým
-            </button>
-        `;
-    }
-    
-    teamActions.innerHTML = actionsHtml;
-}
-
-// Create Team
-document.getElementById('create-team-btn').addEventListener('click', function() {
-    $('#createTeamModal').modal('show');
-});
-
-document.getElementById('confirm-create-team').addEventListener('click', async function() {
-    const name = document.getElementById('new-team-name').value.trim();
-    const description = document.getElementById('new-team-description').value.trim();
-    
-    if (!name) {
-        showToast('Název týmu je povinný', 'error');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/soutez/teams/create', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ name, description })
+            // Show chat (CSS handles mobile/desktop differences)
+            $('.chat').addClass('open');
         });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(data.message, 'success');
-            $('#createTeamModal').modal('hide');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast(data.error, 'error');
-        }
-    } catch (error) {
-        showToast('Chyba při vytváření týmu', 'error');
-        console.error(error);
-    }
-});
+    });
 
-// Edit Team
-function openEditTeamModal(teamId) {
-    const team = findTeamById(teamId);
-    if (!team) return;
-    
-    document.getElementById('edit-team-name').value = team.name;
-    document.getElementById('edit-team-description').value = team.display_description || '';
-    
-    $('#editTeamModal').modal('show');
-    
-    document.getElementById('confirm-edit-team').onclick = async function() {
-        const name = document.getElementById('edit-team-name').value.trim();
-        const description = document.getElementById('edit-team-description').value.trim();
-        
-        if (!name) {
-            showToast('Název týmu je povinný', 'error');
+    // Select and display team details
+    function selectTeam(teamId) {
+        selectedTeamId = teamId;
+
+        // Find team data
+        const team = findTeamById(teamId);
+
+        if (!team) {
+            console.error('Team not found:', teamId);
             return;
         }
-        
-        try {
-            const response = await fetch(`/soutez/teams/${teamId}/edit`, {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name, description })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                showToast(data.message, 'success');
-                $('#editTeamModal').modal('hide');
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                showToast(data.error, 'error');
-            }
-        } catch (error) {
-            showToast('Chyba při úpravě týmu', 'error');
-            console.error(error);
-        }
-    };
-}
 
-// Delete Team
-function openDeleteTeamModal(teamId) {
-    const team = findTeamById(teamId);
-    if (!team) return;
-    
-    document.getElementById('delete-team-name').textContent = team.name;
-    $('#deleteTeamModal').modal('show');
-    
-    document.getElementById('confirm-delete-team').onclick = async function() {
+        // Hide no-team-selected, show team-details
+        noTeamSelected.style.display = 'none';
+        teamDetails.style.display = 'block';
+
+        // Update header
+        teamTitle.textContent = team.name;
+        teamSubtitle.textContent = team.members ? team.members.length + ' členů' : '0 členů';
+
+        // Update team info
+        document.getElementById('detail-team-name').textContent = team.name;
+        document.getElementById('detail-team-description').textContent = team.display_description || 'Tento tým nemá popis.';
+        document.getElementById('detail-team-created').textContent = team.created_at ? formatDate(team.created_at) : 'Neznámé';
+        document.getElementById('detail-team-members-count').textContent = team.members ? team.members.length : 0;
+
+        // Update statistics
+        document.getElementById('stats-member-count').textContent = team.member_count || (team.members ? team.members.length : 0);
+        document.getElementById('stats-flagged-count').textContent = team.flagged_responses_count || 0;
+
+        // Display team members
+        displayTeamMembers(team);
+    }
+
+    // Find team by ID
+    function findTeamById(teamId) {
+        for (let team of teamsData.userTeams) {
+            if (team.id === teamId) return team;
+        }
+        for (let team of teamsData.allTeams) {
+            if (team.id === teamId) return team;
+        }
+        return null;
+    }
+
+    // Display team members
+    function displayTeamMembers(team) {
+        const membersList = document.getElementById('team-members-list');
+        const membersCard = document.getElementById('team-members-card');
+
+        // Hide the entire members card if user is not a member
+        if (!team.is_member) {
+            membersCard.style.display = 'none';
+            return;
+        }
+
+        // Show the card if user is a member
+        membersCard.style.display = 'block';
+
+        if (!team.members || team.members.length === 0) {
+            membersList.innerHTML = '<p class="text-muted text-center">Tento tým nemá žádné členy.</p>';
+            return;
+        }
+
+        let membersHtml = '<div class="list-group list-group-flush">';
+        team.members.forEach((member, index) => {
+            const memberName = member.name || 'Neznámý člen';
+            const firstLetter = memberName[0].toUpperCase();
+            const displayName = member.email || memberName;
+            const isCurrentUser = member.id === {{ current_user.id }};
+
+            // Show remove button only for creators and not for themselves
+            const showRemoveBtn = team.is_creator && !isCurrentUser;
+
+            membersHtml += `
+                <div class="list-group-item">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <figure class="avatar me-3">
+                                <span class="avatar-title rounded-circle" style="background-color: ${getColorForIndex(index)}">
+                                    ${firstLetter}
+                                </span>
+                            </figure>
+                            <div>
+                                <h6 class="mb-0">${displayName}</h6>
+                                <small class="text-muted">${isCurrentUser ? 'Vy' : 'Člen týmu'}</small>
+                            </div>
+                        </div>
+                        ${showRemoveBtn ? `
+                            <button class="btn btn-sm btn-outline-danger" onclick="removeMember(${team.id}, ${member.id}, '${displayName}')">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        membersHtml += '</div>';
+
+        membersList.innerHTML = membersHtml;
+    }
+
+    // Remove member function
+    async function removeMember(teamId, userId, userName) {
+        if (!confirm(`Opravdu chcete odstranit člena "${userName}" z týmu?`)) {
+            return;
+        }
+
         try {
-            const response = await fetch(`/soutez/teams/${teamId}/delete`, {
-                method: 'DELETE'
+            const response = await fetch(`/soutez/teams/${teamId}/remove_member/${userId}`, {
+                method: 'POST'
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 showToast(data.message, 'success');
-                $('#deleteTeamModal').modal('hide');
                 setTimeout(() => location.reload(), 800);
             } else {
                 showToast(data.error, 'error');
             }
         } catch (error) {
-            showToast('Chyba při mazání týmu', 'error');
+            showToast('Chyba při odstraňování člena', 'error');
             console.error(error);
         }
-    };
-}
-
-// Leave Team
-async function leaveTeam(teamId) {
-    const team = findTeamById(teamId);
-    if (!team) return;
-    
-    if (!confirm(`Opravdu chcete opustit tým "${team.name}"?`)) {
-        return;
     }
-    
-    try {
-        const response = await fetch(`/soutez/teams/${teamId}/leave`, {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(data.message, 'success');
-            setTimeout(() => location.reload(), 800);
-        } else {
-            showToast(data.error, 'error');
-        }
-    } catch (error) {
-        showToast('Chyba při opouštění týmu', 'error');
-        console.error(error);
-    }
-}
 
-// Invite Members
-function openInviteModal(teamId) {
-    $('#inviteMembersModal').modal('show');
-    
-    // Reset email inputs
-    document.getElementById('email-inputs').innerHTML = `
-        <div class="input-group mb-2">
-            <input type="email" class="form-control invite-email" placeholder="email@example.com">
-            <div class="input-group-append">
-                <button class="btn btn-outline-danger remove-email-btn" type="button" style="display:none;">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        </div>
-    `;
-    document.getElementById('invite-message').value = '';
-    
-    document.getElementById('confirm-invite-members').onclick = async function() {
-        const emails = [];
-        document.querySelectorAll('.invite-email').forEach(input => {
-            const email = input.value.trim();
-            if (email) emails.push(email);
+    // Generate color for member avatar
+    function getColorForIndex(index) {
+        const colors = ['#0a80ff', '#ff6b6b', '#51cf66', '#ffd43b', '#9775fa', '#20c997', '#ff8787'];
+        return colors[index % colors.length];
+    }
+
+    // Format date
+    function formatDate(dateString) {
+        if (!dateString) return 'Neznámé';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('cs-CZ', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+
+    // Search functionality
+    searchInput.addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+
+        teamItems.forEach(item => {
+            const teamName = item.querySelector('h5').textContent.toLowerCase();
+            const teamDescription = item.querySelector('p').textContent.toLowerCase();
+
+            if (teamName.includes(searchTerm) || teamDescription.includes(searchTerm)) {
+                item.style.display = '';
+            } else {
+                item.style.display = 'none';
+            }
         });
-        
-        if (emails.length === 0) {
-            showToast('Prosím zadejte alespoň jeden email', 'error');
+    });
+
+    // Back button for mobile
+    document.getElementById('back2teams')?.addEventListener('click', function() {
+        $('.chat').removeClass('open');
+        document.querySelectorAll('.list-group-item').forEach(item => item.classList.remove('active'));
+    });
+
+    // ================== TEAM MANAGEMENT FUNCTIONS ==================
+
+    // Update team actions based on user role
+    function updateTeamActions(team) {
+        const teamActions = document.getElementById('team-actions');
+        if (!team) {
+            teamActions.innerHTML = '';
             return;
         }
-        
-        const message = document.getElementById('invite-message').value.trim();
-        
+
+        let actionsHtml = '';
+
+        if (team.is_creator) {
+            // Creator actions
+            actionsHtml = `
+                <button class="btn btn-sm btn-outline-primary mr-2" onclick="openInviteModal(${team.id})">
+                    <i class="fas fa-user-plus me-2"></i> Pozvat
+                </button>
+                <button class="btn btn-sm btn-outline-secondary mr-2" onclick="openEditTeamModal(${team.id})">
+                    <i class="fas fa-edit me-2"></i> Upravit
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="openDeleteTeamModal(${team.id})">
+                    <i class="fas fa-trash me-2"></i> Smazat
+                </button>
+            `;
+        } else if (team.is_member) {
+            // Member actions (non-creator)
+            actionsHtml = `
+                <button class="btn btn-sm btn-outline-warning" onclick="leaveTeam(${team.id})">
+                    <i class="fas fa-sign-out-alt me-2"></i> Opustit tým
+                </button>
+            `;
+        }
+
+        teamActions.innerHTML = actionsHtml;
+    }
+
+    // Create Team
+    document.getElementById('create-team-btn').addEventListener('click', function() {
+        $('#createTeamModal').modal('show');
+    });
+
+    document.getElementById('confirm-create-team').addEventListener('click', async function() {
+        const name = document.getElementById('new-team-name').value.trim();
+        const description = document.getElementById('new-team-description').value.trim();
+
+        if (!name) {
+            showToast('Název týmu je povinný', 'error');
+            return;
+        }
+
         try {
-            const response = await fetch(`/soutez/teams/${teamId}/invite`, {
+            const response = await fetch('/soutez/teams/create', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ emails, message })
+                body: JSON.stringify({ name, description })
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
-                let msg = data.message;
-                if (data.errors && data.errors.length > 0) {
-                    msg += '\n\nChyby:\n' + data.errors.join('\n');
-                }
-                showToast(msg, data.errors ? 'warning' : 'success');
-                $('#inviteMembersModal').modal('hide');
-                if (data.invited_count > 0) {
-                    setTimeout(() => location.reload(), 1500);
-                }
+                showToast(data.message, 'success');
+                $('#createTeamModal').modal('hide');
+                setTimeout(() => location.reload(), 1000);
             } else {
                 showToast(data.error, 'error');
             }
         } catch (error) {
-            showToast('Chyba při posílání pozvánek', 'error');
+            showToast('Chyba při vytváření týmu', 'error');
             console.error(error);
         }
-    };
-}
-
-// Add email input
-document.getElementById('add-email-btn').addEventListener('click', function() {
-    const emailInputs = document.getElementById('email-inputs');
-    const newInput = document.createElement('div');
-    newInput.className = 'input-group mb-2';
-    newInput.innerHTML = `
-        <input type="email" class="form-control invite-email" placeholder="email@example.com">
-        <div class="input-group-append">
-            <button class="btn btn-outline-danger remove-email-btn" type="button">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    `;
-    emailInputs.appendChild(newInput);
-    
-    // Add remove handler
-    newInput.querySelector('.remove-email-btn').addEventListener('click', function() {
-        newInput.remove();
     });
-});
 
-// View pending invitations
-document.getElementById('view-pending-invites-btn')?.addEventListener('click', async function() {
-    try {
-        const response = await fetch('/soutez/invitations/pending');
-        const data = await response.json();
-        
-        if (data.success) {
-            displayPendingInvitations(data.invitations);
-            $('#pendingInvitesModal').modal('show');
-        } else {
+    // Edit Team
+    function openEditTeamModal(teamId) {
+        const team = findTeamById(teamId);
+        if (!team) return;
+
+        document.getElementById('edit-team-name').value = team.name;
+        document.getElementById('edit-team-description').value = team.display_description || '';
+
+        $('#editTeamModal').modal('show');
+
+        document.getElementById('confirm-edit-team').onclick = async function() {
+            const name = document.getElementById('edit-team-name').value.trim();
+            const description = document.getElementById('edit-team-description').value.trim();
+
+            if (!name) {
+                showToast('Název týmu je povinný', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/soutez/teams/${teamId}/edit`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name, description })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    $('#editTeamModal').modal('hide');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Chyba při úpravě týmu', 'error');
+                console.error(error);
+            }
+        };
+    }
+
+    // Delete Team
+    function openDeleteTeamModal(teamId) {
+        const team = findTeamById(teamId);
+        if (!team) return;
+
+        document.getElementById('delete-team-name').textContent = team.name;
+        $('#deleteTeamModal').modal('show');
+
+        document.getElementById('confirm-delete-team').onclick = async function() {
+            try {
+                const response = await fetch(`/soutez/teams/${teamId}/delete`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    $('#deleteTeamModal').modal('hide');
+                    setTimeout(() => location.reload(), 800);
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Chyba při mazání týmu', 'error');
+                console.error(error);
+            }
+        };
+    }
+
+    // Leave Team
+    async function leaveTeam(teamId) {
+        const team = findTeamById(teamId);
+        if (!team) return;
+
+        if (!confirm(`Opravdu chcete opustit tým "${team.name}"?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/soutez/teams/${teamId}/leave`, {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast(data.message, 'success');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                showToast(data.error, 'error');
+            }
+        } catch (error) {
+            showToast('Chyba při opouštění týmu', 'error');
+            console.error(error);
+        }
+    }
+
+    // Invite Members
+    function openInviteModal(teamId) {
+        $('#inviteMembersModal').modal('show');
+
+        // Reset email inputs
+        document.getElementById('email-inputs').innerHTML = `
+            <div class="input-group mb-2">
+                <input type="email" class="form-control invite-email" placeholder="email@example.com">
+                <div class="input-group-append">
+                    <button class="btn btn-outline-danger remove-email-btn" type="button" style="display:none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        document.getElementById('invite-message').value = '';
+
+        document.getElementById('confirm-invite-members').onclick = async function() {
+            const emails = [];
+            document.querySelectorAll('.invite-email').forEach(input => {
+                const email = input.value.trim();
+                if (email) emails.push(email);
+            });
+
+            if (emails.length === 0) {
+                showToast('Prosím zadejte alespoň jeden email', 'error');
+                return;
+            }
+
+            const message = document.getElementById('invite-message').value.trim();
+
+            try {
+                const response = await fetch(`/soutez/teams/${teamId}/invite`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ emails, message })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    let msg = data.message;
+                    if (data.errors && data.errors.length > 0) {
+                        msg += '\n\nChyby:\n' + data.errors.join('\n');
+                    }
+                    showToast(msg, data.errors ? 'warning' : 'success');
+                    $('#inviteMembersModal').modal('hide');
+                    if (data.invited_count > 0) {
+                        setTimeout(() => location.reload(), 1500);
+                    }
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Chyba při posílání pozvánek', 'error');
+                console.error(error);
+            }
+        };
+    }
+
+    // Add email input
+    document.getElementById('add-email-btn').addEventListener('click', function() {
+        const emailInputs = document.getElementById('email-inputs');
+        const newInput = document.createElement('div');
+        newInput.className = 'input-group mb-2';
+        newInput.innerHTML = `
+            <input type="email" class="form-control invite-email" placeholder="email@example.com">
+            <div class="input-group-append">
+                <button class="btn btn-outline-danger remove-email-btn" type="button">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        emailInputs.appendChild(newInput);
+
+        // Add remove handler
+        newInput.querySelector('.remove-email-btn').addEventListener('click', function() {
+            newInput.remove();
+        });
+    });
+
+    // View pending invitations
+    document.getElementById('view-pending-invites-btn')?.addEventListener('click', async function() {
+        try {
+            const response = await fetch('/soutez/invitations/pending');
+            const data = await response.json();
+
+            if (data.success) {
+                displayPendingInvitations(data.invitations);
+                $('#pendingInvitesModal').modal('show');
+            } else {
+                showToast('Chyba při načítání pozvánek', 'error');
+            }
+        } catch (error) {
             showToast('Chyba při načítání pozvánek', 'error');
+            console.error(error);
         }
-    } catch (error) {
-        showToast('Chyba při načítání pozvánek', 'error');
-        console.error(error);
-    }
-    
-    // Update active state
-    document.querySelectorAll('.team-item').forEach(t => t.classList.remove('active'));
-    this.classList.add('active');
-    
-    // Show chat (CSS handles mobile/desktop differences)
-    $('.chat').addClass('open');
-});
 
-function displayPendingInvitations(invitations) {
-    const container = document.getElementById('pending-invitations-list');
-    
-    if (!invitations || invitations.length === 0) {
-        container.innerHTML = '<p class="text-center text-muted">Nemáte žádné nevyřízené pozvánky</p>';
-        return;
-    }
-    
-    let html = '';
-    invitations.forEach(inv => {
-        html += `
-            <div class="card mb-3">
-                <div class="card-body">
-                    <h5 class="card-title">
-                        <i class="fas fa-users me-2"></i>${inv.team_name}
-                    </h5>
-                    <p class="card-text text-muted">
-                        <small>Od: ${inv.inviter_email}</small><br>
-                        ${inv.message ? `<em>"${inv.message}"</em>` : ''}
-                    </p>
-                    <div class="d-flex justify-content-end">
-                        <button class="btn btn-success btn-sm mr-2" onclick="acceptInvitation(${inv.id})">
-                            <i class="fas fa-check"></i> Přijmout
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="declineInvitation(${inv.id})">
-                            <i class="fas fa-times"></i> Odmítnout
-                        </button>
+        // Update active state
+        document.querySelectorAll('.team-item').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+
+        // Show chat (CSS handles mobile/desktop differences)
+        $('.chat').addClass('open');
+    });
+
+    function displayPendingInvitations(invitations) {
+        const container = document.getElementById('pending-invitations-list');
+
+        if (!invitations || invitations.length === 0) {
+            container.innerHTML = '<p class="text-center text-muted">Nemáte žádné nevyřízené pozvánky</p>';
+            return;
+        }
+
+        let html = '';
+        invitations.forEach(inv => {
+            html += `
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-users me-2"></i>${inv.team_name}
+                        </h5>
+                        <p class="card-text text-muted">
+                            <small>Od: ${inv.inviter_email}</small><br>
+                            ${inv.message ? `<em>"${inv.message}"</em>` : ''}
+                        </p>
+                        <div class="d-flex justify-content-end">
+                            <button class="btn btn-success btn-sm mr-2" onclick="acceptInvitation(${inv.id})">
+                                <i class="fas fa-check me-2"></i> Přijmout
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="declineInvitation(${inv.id})">
+                                <i class="fas fa-times me-2"></i> Odmítnout
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
-    });
-    
-    container.innerHTML = html;
-}
-
-async function acceptInvitation(invitationId) {
-    try {
-        const response = await fetch(`/soutez/invitations/${invitationId}/accept`, {
-            method: 'POST'
+            `;
         });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(data.message, 'success');
-            $('#pendingInvitesModal').modal('hide');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast(data.error, 'error');
+
+        container.innerHTML = html;
+    }
+
+    async function acceptInvitation(invitationId) {
+        try {
+            const response = await fetch(`/soutez/invitations/${invitationId}/accept`, {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast(data.message, 'success');
+                $('#pendingInvitesModal').modal('hide');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast(data.error, 'error');
+            }
+        } catch (error) {
+            showToast('Chyba při přijímání pozvánky', 'error');
+            console.error(error);
         }
-    } catch (error) {
-        showToast('Chyba při přijímání pozvánky', 'error');
-        console.error(error);
     }
-}
 
-async function declineInvitation(invitationId) {
-    try {
-        const response = await fetch(`/soutez/invitations/${invitationId}/decline`, {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(data.message, 'success');
-            $('#pendingInvitesModal').modal('hide');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast(data.error, 'error');
+    async function declineInvitation(invitationId) {
+        try {
+            const response = await fetch(`/soutez/invitations/${invitationId}/decline`, {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast(data.message, 'success');
+                $('#pendingInvitesModal').modal('hide');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast(data.error, 'error');
+            }
+        } catch (error) {
+            showToast('Chyba při odmítání pozvánky', 'error');
+            console.error(error);
         }
-    } catch (error) {
-        showToast('Chyba při odmítání pozvánky', 'error');
-        console.error(error);
     }
-}
 
-// Toast notification function
-function showToast(message, type = 'info') {
-    const bgColor = {
-        'success': '#28a745',
-        'error': '#dc3545',
-        'warning': '#ffc107',
-        'info': '#17a2b8'
-    }[type] || '#17a2b8';
-    
-    // Use existing toast system or create simple alert
-    if (typeof Toastify !== 'undefined') {
-        Toastify({
-            text: message,
-            duration: 3000,
-            gravity: "top",
-            position: "right",
-            backgroundColor: bgColor,
-        }).showToast();
-    } else {
-        alert(message);
-    }
-}
+    // Toast notification function
+    function showToast(message, type = 'info') {
+        const bgColor = {
+            'success': '#28a745',
+            'error': '#dc3545',
+            'warning': '#ffc107',
+            'info': '#17a2b8'
+        }[type] || '#17a2b8';
 
-// Update selectTeam to also update actions
-const originalSelectTeam = selectTeam;
-selectTeam = function(teamId) {
-    if (teamId === 'pending') {
-        // Handle pending invites view
-        document.getElementById('view-pending-invites-btn')?.click();
-        return;
+        // Use existing toast system or create simple alert
+        if (typeof Toastify !== 'undefined') {
+            Toastify({
+                text: message,
+                duration: 3000,
+                gravity: "top",
+                position: "right",
+                backgroundColor: bgColor,
+            }).showToast();
+        } else {
+            alert(message);
+        }
     }
-    
-    originalSelectTeam(teamId);
-    const team = findTeamById(teamId);
-    updateTeamActions(team);
-    
-    // Display pending invites for creators
-    displayTeamPendingInvites(team);
-}
 
-// Display team's pending invitations (for creators)
-function displayTeamPendingInvites(team) {
-    const invitesCard = document.getElementById('team-pending-invites-card');
-    const invitesList = document.getElementById('team-pending-invites-list');
-    
-    if (!team.is_creator || !team.pending_invites || team.pending_invites.length === 0) {
-        invitesCard.style.display = 'none';
-        return;
+    // Update selectTeam to also update actions
+    const originalSelectTeam = selectTeam;
+    selectTeam = function(teamId) {
+        if (teamId === 'pending') {
+            // Handle pending invites view
+            document.getElementById('view-pending-invites-btn')?.click();
+            return;
+        }
+
+        originalSelectTeam(teamId);
+        const team = findTeamById(teamId);
+        updateTeamActions(team);
+
+        // Display pending invites for creators
+        displayTeamPendingInvites(team);
     }
-    
-    invitesCard.style.display = 'block';
-    
-    let html = '<div class="list-group list-group-flush">';
-    team.pending_invites.forEach(invite => {
-        const date = invite.created_at ? new Date(invite.created_at).toLocaleDateString('cs-CZ') : 'Neznámé';
-        html += `
-            <div class="list-group-item">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <i class="fas fa-envelope me-2 text-warning"></i>
-                        <strong>${invite.invitee_email}</strong>
-                        <br>
-                        <small class="text-muted">Odesláno: ${date}</small>
+
+    // Display team's pending invitations (for creators)
+    function displayTeamPendingInvites(team) {
+        const invitesCard = document.getElementById('team-pending-invites-card');
+        const invitesList = document.getElementById('team-pending-invites-list');
+
+        if (!team.is_creator || !team.pending_invites || team.pending_invites.length === 0) {
+            invitesCard.style.display = 'none';
+            return;
+        }
+
+        invitesCard.style.display = 'block';
+
+        let html = '<div class="list-group list-group-flush">';
+        team.pending_invites.forEach(invite => {
+            const date = invite.created_at ? new Date(invite.created_at).toLocaleDateString('cs-CZ') : 'Neznámé';
+            html += `
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-envelope me-2 text-warning"></i>
+                            <strong>${invite.invitee_email}</strong>
+                            <br>
+                            <small class="text-muted">Odesláno: ${date}</small>
+                        </div>
+                        <span class="badge bg-warning text-dark">Čeká</span>
                     </div>
-                    <span class="badge bg-warning text-dark">Čeká</span>
                 </div>
-            </div>
-        `;
-    });
-    html += '</div>';
-    
-    invitesList.innerHTML = html;
-}
+            `;
+        });
+        html += '</div>';
+
+        invitesList.innerHTML = html;
+    }
 </script>
 
 <style>
-/* Custom styles for teams page */
-.team-section-header {
-    background-color: #f8f9fa !important;
-    padding: 0.5rem 1rem !important;
-    border-top: 1px solid #dee2e6;
-    border-bottom: 1px solid #dee2e6;
-}
+    /* Custom styles for teams page */
+    .team-section-header {
+        background-color: #f8f9fa !important;
+        padding: 0.5rem 1rem !important;
+        border-top: 1px solid #dee2e6;
+        border-bottom: 1px solid #dee2e6;
+    }
 
-.team-item {
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-}
+    .team-item {
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
 
-.team-item:hover {
-    background-color: #f8f9fa;
-}
+    .team-item:hover {
+        background-color: #f8f9fa;
+    }
 
-.team-item.active {
-    background-color: #e7f3ff;
-    border-left: 3px solid #0a80ff;
-}
+    .team-item.active {
+        background-color: #e7f3ff;
+        border-left: 3px solid #0a80ff;
+    }
 
-#team-details .card {
-    border-radius: 0.5rem;
-    border: none;
-}
+    #team-details .card {
+        border-radius: 0.5rem;
+        border: none;
+    }
 
-#team-details .card-header {
-    border-radius: 0.5rem 0.5rem 0 0;
-    padding: 1rem 1.25rem;
-}
+    #team-details .card-header {
+        border-radius: 0.5rem 0.5rem 0 0;
+        padding: 1rem 1.25rem;
+    }
 
-.no-message-container {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    min-height: 60vh;
-}
+    .no-message-container {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        min-height: 60vh;
+    }
 </style>
 
 {% endblock %}
