@@ -1155,3 +1155,7 @@ body.modal-open .layout {
 .me-3 {
     margin-inline-end: 0.75rem;
 }
+
+figure.avatar {
+    margin-inline: 1rem;
+}
