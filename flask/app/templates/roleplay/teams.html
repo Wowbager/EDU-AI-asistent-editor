@@ -121,7 +121,9 @@ content %}
                                 </figure>
                                 <div class="users-list-body">
                                     <div>
-                                        <h5>{{ team.name }}</h5>
+                                        <h5 style="color: #000">
+                                            {{ team.name }}
+                                        </h5>
                                         <p class="text-truncate">
                                             {{ (team.display_description if
                                             team.display_description else "Tento
@@ -814,7 +816,7 @@ content %}
                 <div class="list-group-item">
                     <div class="d-flex align-items-center justify-content-between">
                         <div class="d-flex align-items-center">
-                            <figure class="avatar me-3">
+                            <figure class="avatar me-3" style="margin-inline: 1rem;">
                                 <span class="avatar-title rounded-circle" style="background-color: ${getColorForIndex(index)}">
                                     ${firstLetter}
                                 </span>
