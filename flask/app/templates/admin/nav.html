@@ -1,73 +1,168 @@
-<nav class="navigation">
-	<div class="nav-group">
-		<ul>
-			<li class="logo">
-				<a href="{{url_for('admin.courses')}}">
-					<svg version="1.1" xmlns="http://www.w3.org/2000/svg"
-						 xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-						 width="612px" height="612px" viewBox="0 0 612 612"
-						 style="enable-background:new 0 0 612 612;" xml:space="preserve">
-						<g>
-							<g id="_x32__26_">
-								<g>
-								<path d="M401.625,325.125h-191.25c-10.557,0-19.125,8.568-19.125,19.125s8.568,19.125,19.125,19.125h191.25
-								c10.557,0,19.125-8.568,19.125-19.125S412.182,325.125,401.625,325.125z M439.875,210.375h-267.75
-								c-10.557,0-19.125,8.568-19.125,19.125s8.568,19.125,19.125,19.125h267.75c10.557,0,19.125-8.568,19.125-19.125
-								S450.432,210.375,439.875,210.375z M306,0C137.012,0,0,119.875,0,267.75c0,84.514,44.848,159.751,114.75,208.826V612
-								l134.047-81.339c18.552,3.061,37.638,4.839,57.203,4.839c169.008,0,306-119.875,306-267.75C612,119.875,475.008,0,306,0z
-								M306,497.25c-22.338,0-43.911-2.601-64.643-7.019l-90.041,54.123l1.205-88.701C83.5,414.133,38.25,345.513,38.25,267.75
-								c0-126.741,119.875-229.5,267.75-229.5c147.875,0,267.75,102.759,267.75,229.5S453.875,497.25,306,497.25z"/>
-								</g>
-							</g>
-						</g>
-						<g></g>
-						<g></g>
-						<g></g>
-						<g></g>
-						<g></g>
-						<g></g>
-						<g></g>
-						<g></g>
-						<g></g>
-						<g></g>
-						<g></g>
-						<g></g>
-						<g></g>
-						<g></g>
-						<g></g>
-					</svg>
-				</a>
-			</li>
-			<li>
-				<a class="{% if 'lectures' in request.path or 'courses' in request.path %}active{%endif%}" href="{{url_for('admin.courses')}}">
-					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-info"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-				</a>
-			</li>
-			{% if current_user.is_super_admin %}
-			<li>
-				<a class="{% if 'chats' in request.path %}active{%endif%}" href="{{url_for('admin.chats')}}">
-					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-users"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16.65 7a4.35 4.35 0 1 0-6.3 0"></path></svg>
-				</a>
-			</li>
-			{% endif %}
-			<li class="scissors">
-				<a href="{{url_for('roleplay.roleplay_home')}}" title="Přepnout na soutěž">
-					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-message-circle"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
-				</a>
-			</li>
-			<li>
-				<a href="javascript:void(0);" data-toggle="dropdown">
-					<figure class="avatar">
-						<span class="avatar-title rounded-circle" style="background-color: #00">0X</span>
-					</figure>
-				</a>
-				<div class="dropdown-menu">
-					
-					<a href="#" class="dropdown-item">Super admin</a>
-					
-					<a href="{{url_for('admin.logout')}}" class="dropdown-item text-danger">Odhlásit se</a>
-				</div>
-			</li>
-		</ul>
-	</div>
-</nav>
+<div class="navigation-rail">
+    <div class="top">
+        <a href="{{url_for('admin.courses')}}">
+            <svg
+                version="1.1"
+                xmlns="http://www.w3.org/2000/svg"
+                xmlns:xlink="http://www.w3.org/1999/xlink"
+                x="0px"
+                y="0px"
+                width="612px"
+                height="612px"
+                viewBox="0 0 612 612"
+                style="enable-background: new 0 0 612 612"
+                xml:space="preserve"
+            >
+                <g>
+                    <g id="_x32__26_">
+                        <g>
+                            <path
+                                d="M401.625,325.125h-191.25c-10.557,0-19.125,8.568-19.125,19.125s8.568,19.125,19.125,19.125h191.25
+						c10.557,0,19.125-8.568,19.125-19.125S412.182,325.125,401.625,325.125z M439.875,210.375h-267.75
+						c-10.557,0-19.125,8.568-19.125,19.125s8.568,19.125,19.125,19.125h267.75c10.557,0,19.125-8.568,19.125-19.125
+						S450.432,210.375,439.875,210.375z M306,0C137.012,0,0,119.875,0,267.75c0,84.514,44.848,159.751,114.75,208.826V612
+						l134.047-81.339c18.552,3.061,37.638,4.839,57.203,4.839c169.008,0,306-119.875,306-267.75C612,119.875,475.008,0,306,0z
+						M306,497.25c-22.338,0-43.911-2.601-64.643-7.019l-90.041,54.123l1.205-88.701C83.5,414.133,38.25,345.513,38.25,267.75
+						c0-126.741,119.875-229.5,267.75-229.5c147.875,0,267.75,102.759,267.75,229.5S453.875,497.25,306,497.25z"
+                            />
+                        </g>
+                    </g>
+                </g>
+            </svg>
+            <span>EDU</span>
+        </a>
+
+        <button
+            class="icon-button"
+            onclick="document.body.classList.toggle('navigation-open');"
+            aria-label="Toggle navigation"
+        >
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="feather feather-x"
+            >
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M6 18 18 6M6 6l12 12"
+                />
+            </svg>
+        </button>
+    </div>
+
+    <nav>
+        <ul>
+            <li>
+                <a
+                    class="{% if 'lectures' in request.path or 'courses' in request.path %}active{%endif%}"
+                    href="{{url_for('admin.courses')}}"
+                >
+                    <div class="nav-icon">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="feather feather-info"
+                        >
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        </svg>
+                    </div>
+                    Kurzy
+                </a>
+            </li>
+            {% if current_user.is_super_admin %}
+            <li>
+                <a
+                    class="{% if 'chats' in request.path %}active{%endif%}"
+                    href="{{url_for('admin.chats')}}"
+                >
+                    <div class="nav-icon">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="feather feather-users"
+                        >
+                            <path
+                                d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                            ></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16.65 7a4.35 4.35 0 1 0-6.3 0"></path>
+                        </svg>
+                    </div>
+                    Chaty
+                </a>
+            </li>
+            {% endif %}
+            <li class="scissors">
+                <a
+                    href="{{url_for('roleplay.roleplay_home')}}"
+                    title="Přepnout na soutěž"
+                >
+                    <div class="nav-icon">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="feather feather-message-circle"
+                        >
+                            <path
+                                d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
+                            ></path>
+                        </svg>
+                    </div>
+                    Soutěž
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="bottom">
+        <div>
+            <a href="javascript:void(0);" data-toggle="dropdown">
+                <figure class="avatar">
+                    <span
+                        class="avatar-title rounded-circle"
+                        style="background-color: #000"
+                        >0X</span
+                    >
+                </figure>
+                Účet
+            </a>
+            <div class="dropdown-menu">
+                <a href="#" class="dropdown-item">Super admin</a>
+
+                <a
+                    href="{{url_for('admin.logout')}}"
+                    class="dropdown-item text-danger"
+                    >Odhlásit se</a
+                >
+            </div>
+        </div>
+    </div>
+</div>

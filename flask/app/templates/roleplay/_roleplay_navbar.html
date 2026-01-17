@@ -17,12 +17,12 @@
                             <g>
                                 <path
                                     d="M401.625,325.125h-191.25c-10.557,0-19.125,8.568-19.125,19.125s8.568,19.125,19.125,19.125h191.25
-                            c10.557,0,19.125-8.568,19.125-19.125S412.182,325.125,401.625,325.125z M439.875,210.375h-267.75
-                             c-10.557,0-19.125,8.568-19.125,19.125s8.568,19.125,19.125,19.125h267.75c10.557,0,19.125-8.568,19.125-19.125
-                             S450.432,210.375,439.875,210.375z M306,0C137.012,0,0,119.875,0,267.75c0,84.514,44.848,159.751,114.75,208.826V612
-                             l134.047-81.339c18.552,3.061,37.638,4.839,57.203,4.839c169.008,0,306-119.875,306-267.75C612,119.875,475.008,0,306,0z
-                             M306,497.25c-22.338,0-43.911-2.601-64.643-7.019l-90.041,54.123l1.205-88.701C83.5,414.133,38.25,345.513,38.25,267.75
-                             c0-126.741,119.875-229.5,267.75-229.5c147.875,0,267.75,102.759,267.75,229.5S453.875,497.25,306,497.25z"
+								c10.557,0,19.125-8.568,19.125-19.125S412.182,325.125,401.625,325.125z M439.875,210.375h-267.75
+								c-10.557,0-19.125,8.568-19.125,19.125s8.568,19.125,19.125,19.125h267.75c10.557,0,19.125-8.568,19.125-19.125
+								S450.432,210.375,439.875,210.375z M306,0C137.012,0,0,119.875,0,267.75c0,84.514,44.848,159.751,114.75,208.826V612
+								l134.047-81.339c18.552,3.061,37.638,4.839,57.203,4.839c169.008,0,306-119.875,306-267.75C612,119.875,475.008,0,306,0z
+								M306,497.25c-22.338,0-43.911-2.601-64.643-7.019l-90.041,54.123l1.205-88.701C83.5,414.133,38.25,345.513,38.25,267.75
+								c0-126.741,119.875-229.5,267.75-229.5c147.875,0,267.75,102.759,267.75,229.5S453.875,497.25,306,497.25z"
                                 />
                             </g>
                         </g>
@@ -53,6 +53,7 @@
             </svg>
         </button>
     </div>
+
     <nav>
         <ul>
             <li>
@@ -257,6 +258,7 @@
             </li>
         </ul>
     </nav>
+
     <div class="bottom">
         <div>
             <a href="javascript:void(0);" data-toggle="dropdown">
@@ -288,142 +290,3 @@
         </div>
     </div>
 </div>
-
-<style>
-    .navigation-rail {
-        width: 5rem;
-        background-color: #e6e6e6;
-        padding: 1rem;
-        display: flex;
-        gap: 1rem;
-        flex-direction: column;
-        justify-content: stretch;
-        transition: all 0.4s ease-in-out;
-        opacity: 0.8;
-    }
-
-    @media (orientation: landscape) {
-        .navigation-rail:hover {
-            width: 12rem;
-            opacity: 1;
-        }
-    }
-
-    .navigation-rail .top > a,
-    .icon-button {
-        background: none;
-        border: none;
-        cursor: pointer;
-        height: 4rem;
-        color: #0a80ff;
-        padding: 0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .icon-button {
-        width: 36px;
-        height: 36px;
-        color: #0a80ff;
-        margin-left: 0.5rem;
-    }
-
-    .navigation-rail .top span,
-    .navigation-rail .top button {
-        display: none;
-    }
-
-    .navigation-rail > nav {
-        height: 100%;
-        display: flex;
-        justify-content: center;
-    }
-
-    .navigation-rail > nav ul {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        gap: 2rem;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: flex-start;
-        overflow: hidden;
-        align-self: center;
-    }
-
-    .navigation-rail > .bottom {
-        overflow: hidden;
-    }
-
-    .navigation-rail > .bottom > div,
-    .navigation-rail > nav ul li {
-        width: 12rem;
-        display: flex;
-        flex-direction: row;
-    }
-
-    .navigation-rail > .bottom a,
-    .navigation-rail > nav ul li a {
-        display: flex;
-        align-items: center;
-        text-decoration: none;
-        font-size: 1rem;
-        width: 100%;
-        transition: all 0.4s ease-in-out;
-    }
-
-    .navigation-rail > .bottom a:hover,
-    .navigation-rail > nav ul li a:hover {
-        scale: 1.05;
-    }
-
-    @media only screen and (max-width: 1200px) and (orientation: portrait) {
-        .navigation-rail {
-            position: absolute;
-            height: 100%;
-            top: 0;
-            left: -100%;
-            width: 0;
-            z-index: 10;
-        }
-
-        body.navigation-open .navigation-rail {
-            left: 0;
-            width: 100vw;
-            opacity: 1;
-        }
-
-        .navigation-rail .top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 1rem;
-        }
-
-        .navigation-rail .top span,
-        .navigation-rail .top button {
-            display: initial;
-            font-weight: bold;
-        }
-    }
-
-    .nav-icon {
-        width: 3rem;
-        height: 3rem;
-        margin-right: 0.5rem;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .nav-icon > figure.avatar {
-        margin: 0;
-    }
-
-    body.navigation-open::after {
-        display: none;
-    }
-</style>
