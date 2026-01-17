@@ -43,7 +43,7 @@
                 viewBox="0 0 24 24"
                 stroke-width="1.5"
                 stroke="currentColor"
-                class="size-6"
+                class="feather feather-x"
             >
                 <path
                     stroke-linecap="round"
@@ -83,12 +83,12 @@
                 </a>
             </li>
             <li>
-                <div class="nav-icon">
-                    <a
-                        class="{% if request.endpoint == 'roleplay.conversations' and request.args.get('show_public_flags') == 'true' %}active{%endif%}"
-                        href="{{url_for('roleplay.conversations', show_public_flags='true')}}"
-                        title="Zveřejněné zprávy"
-                    >
+                <a
+                    class="{% if request.endpoint == 'roleplay.conversations' and request.args.get('show_public_flags') == 'true' %}active{%endif%}"
+                    href="{{url_for('roleplay.conversations', show_public_flags='true')}}"
+                    title="Zveřejněné zprávy"
+                >
+                    <div class="nav-icon">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             width="24"
@@ -107,9 +107,9 @@
                                 d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
                             ></path>
                         </svg>
-                    </a>
-                </div>
-                Zprávy
+                    </div>
+                    Zprávy
+                </a>
             </li>
             {% if current_user.is_authenticated %}
             <li>
@@ -257,12 +257,15 @@
             </li>
             <li>
                 <a href="javascript:void(0);" data-toggle="dropdown">
-                    <figure class="avatar">
-                        <span class="avatar-title rounded-circle"
-                            >{{current_user.email[0]|upper if
-                            current_user.is_authenticated else '?'}}</span
-                        >
-                    </figure>
+                    <div class="nav-icon">
+                        <figure class="avatar">
+                            <span class="avatar-title rounded-circle"
+                                >{{current_user.email[0]|upper if
+                                current_user.is_authenticated else '?'}}</span
+                            >
+                        </figure>
+                    </div>
+                    Účet
                 </a>
                 <div class="dropdown-menu">
                     <a class="dropdown-item" href="javascript:void(0);">
@@ -286,7 +289,7 @@
 
 <style>
     .navigation-rail {
-        width: 3rem;
+        width: 5rem;
         background-color: #e6e6e6;
         padding: 0 1rem;
         display: flex;
@@ -299,7 +302,7 @@
 
     @media (orientation: landscape) {
         .navigation-rail:hover {
-            width: 10rem;
+            width: 12rem;
             opacity: 1;
         }
     }
@@ -350,14 +353,13 @@
     }
 
     .navigation-rail > nav ul li {
-        width: 10rem;
+        width: 12rem;
         display: flex;
         flex-direction: row;
     }
 
     .navigation-rail > nav ul li a {
         display: flex;
-        gap: 1rem;
         align-items: center;
         text-decoration: none;
         font-size: 1rem;
@@ -381,7 +383,7 @@
 
         body.navigation-open .navigation-rail {
             left: 0;
-            width: calc(100vw - 2rem);
+            width: 100vw;
             opacity: 1;
         }
 
@@ -395,6 +397,16 @@
         .navigation-rail .top span,
         .navigation-rail .top button {
             display: initial;
+            font-weight: bold;
         }
+    }
+
+    .nav-icon {
+        width: 3rem;
+        height: 3rem;
+        margin-right: 0.5rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
     }
 </style>

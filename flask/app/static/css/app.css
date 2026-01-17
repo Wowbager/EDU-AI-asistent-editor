@@ -3024,7 +3024,7 @@ body.rtl
     height: 28px;
 }
 @media (max-width: 1200px) {
-    body.navigation-open:after {
+    /* body.navigation-open:after {
         content: "";
         display: block;
         position: fixed;
@@ -3034,7 +3034,7 @@ body.rtl
         bottom: 0;
         top: 0;
         z-index: 1020;
-    }
+    } */
     body.navigation-open .navigation {
         display: block;
     }
