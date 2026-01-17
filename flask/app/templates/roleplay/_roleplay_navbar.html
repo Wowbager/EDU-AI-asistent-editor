@@ -353,12 +353,14 @@
         align-self: center;
     }
 
+    .navigation-rail > .bottom,
     .navigation-rail > nav ul li {
         width: 12rem;
         display: flex;
         flex-direction: row;
     }
 
+    .navigation-rail > .bottom a,
     .navigation-rail > nav ul li a {
         display: flex;
         align-items: center;
@@ -368,6 +370,7 @@
         transition: all 0.4s ease-in-out;
     }
 
+    .navigation-rail > .bottom a:hover,
     .navigation-rail > nav ul li a:hover {
         scale: 1.05;
     }
@@ -413,5 +416,9 @@
 
     .nav-icon > figure.avatar {
         margin: 0;
+    }
+
+    body.navigation-open::after {
+        display: none;
     }
 </style>

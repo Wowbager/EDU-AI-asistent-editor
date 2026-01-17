@@ -3024,17 +3024,6 @@ body.rtl
     height: 28px;
 }
 @media (max-width: 1200px) {
-    /* body.navigation-open:after {
-        content: "";
-        display: block;
-        position: fixed;
-        background: rgba(0, 0, 0, 0.5);
-        right: 0;
-        left: 0;
-        bottom: 0;
-        top: 0;
-        z-index: 1020;
-    } */
     body.navigation-open .navigation {
         display: block;
     }
