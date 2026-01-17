@@ -5,10 +5,8 @@
                 version="1.1"
                 xmlns="http://www.w3.org/2000/svg"
                 xmlns:xlink="http://www.w3.org/1999/xlink"
-                x="0px"
-                y="0px"
-                width="612px"
-                height="612px"
+                width="24"
+                height="24"
                 viewBox="0 0 612 612"
                 style="enable-background: new 0 0 612 612"
                 xml:space="preserve"
@@ -106,7 +104,7 @@
                             ></path>
                             <circle cx="9" cy="7" r="4"></circle>
                             <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16.65 7a4.35 4.35 0 1 0-6.3 0"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                         </svg>
                     </div>
                     Chaty
@@ -145,13 +143,14 @@
     <div class="bottom">
         <div>
             <a href="javascript:void(0);" data-toggle="dropdown">
-                <figure class="avatar">
-                    <span
-                        class="avatar-title rounded-circle"
-                        style="background-color: #000"
-                        >0X</span
-                    >
-                </figure>
+                <div class="nav-icon">
+                    <figure class="avatar">
+                        <span class="avatar-title rounded-circle">
+                            {{current_user.email[0]|upper if
+                            current_user.is_authenticated else '?'}}
+                        </span>
+                    </figure>
+                </div>
                 Účet
             </a>
             <div class="dropdown-menu">
