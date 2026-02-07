@@ -224,7 +224,39 @@
         });
     }
 
-    startBtn.addEventListener("click", startChat);
+    startBtn.addEventListener("click", () => {
+        // Get selected role data
+        const selectedOption = roleSelect.options[roleSelect.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            alert("Prosím, vyberte roli.");
+            return;
+        }
+
+        const roleTitle = selectedOption.text;
+        const roleBrief = selectedOption.dataset.brief;
+        const subject = aiSubjectInput.value.trim();
+
+        // Fill sidebar fields
+        subjectInput.value = subject;
+        customRoleName.value = roleTitle;
+        customRoleBrief.value = ""; // Leave empty as decided
+        customInstructions.value = roleBrief; // Minimal format
+
+        // Update character counter for instructions
+        const instructionsLength = roleBrief.length;
+        customCharCounter.textContent = `${instructionsLength}/1500 znaků`;
+        if (instructionsLength > 1200) {
+            customCharCounter.className = "text-warning mt-1";
+        } else {
+            customCharCounter.className = "text-muted mt-1";
+        }
+
+        // Close the modal
+        $("#aiRolesModal").modal("hide");
+
+        // Trigger custom chat (will validate and start)
+        startCustomChat();
+    });
     sendBtn.addEventListener("click", sendMessage);
     newChatBtn.addEventListener("click", resetToRoleSelection);
 
