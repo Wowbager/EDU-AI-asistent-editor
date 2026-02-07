@@ -42,44 +42,78 @@ def count_assistant_messages(chat_history):
         return 0
     return sum(1 for msg in chat_history if msg.get('role') == 'assistant')
 
-def call_openai_chat_completion(model, messages, request_timeout=None):
+def generate_roles_from_subject(subject: str, model: str, request_timeout: int) -> str:
     """
-    Calls the OpenAI ChatCompletion API for role generation.
-    This function is now only used for generating roleplay personas.
+    Generate roleplay personas for a given subject using AI with strict structured outputs.
+    
+    Uses JSON Schema with strict mode to guarantee valid response format.
     
     Args:
-        model: The OpenAI model to use
-        messages: List of message dicts with 'role' and 'content'
-        request_timeout: Optional timeout in seconds
+        subject: The subject/topic for which to generate roles (e.g., "Starověký Řím")
+        model: The OpenAI model to use for generation
+        request_timeout: Timeout in seconds
         
     Returns:
-        The response content string
+        JSON string containing object with 'roles' array
         
     Raises:
         Exception: If competition has ended or API call fails
     """
-    if request_timeout is None:
-        request_timeout = CHAT_TIMEOUT
-        
     if not COMPETITION_RUNNING:
-        raise Exception("Soutěž již skončila. AI chat není k dispozici.")
+        raise Exception("Soutěž již skončila. Generování rolí není k dispozici.")
+    
+    from .ai_prompts import ROLE_GENERATION_SYSTEM_PROMPT, ROLE_GENERATION_TEMPERATURE
+    
+    messages = [
+        {"role": "system", "content": ROLE_GENERATION_SYSTEM_PROMPT},
+        {"role": "user", "content": f"předmět: {subject}"}
+    ]
+    
+    # Define strict JSON schema for role generation
+    role_schema = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "roleplay_roles_response",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "roles": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "title": {"type": "string"},
+                                "brief": {"type": "string"}
+                            },
+                            "required": ["id", "title", "brief"],
+                            "additionalProperties": False
+                        }
+                    }
+                },
+                "required": ["roles"],
+                "additionalProperties": False
+            }
+        }
+    }
     
     try:
-        # Use higher max_tokens for role generation to ensure complete JSON
         response = openai.ChatCompletion.create(
             model=model,
             messages=messages,
             request_timeout=request_timeout,
-            temperature=CHAT_TEMPERATURE,
+            temperature=ROLE_GENERATION_TEMPERATURE,
             max_tokens=ROLE_GEN_MAX_TOKENS,
+            response_format=role_schema,
             reasoning_effort="low",
         )
         return response.choices[0].message.content
     except openai.error.OpenAIError as e:
-        print(f"OpenAI API error in chat_utils: {str(e)}")
+        print(f"OpenAI API error during role generation: {str(e)}")
         raise
     except Exception as e:
-        print(f"An unexpected error occurred during OpenAI call in chat_utils: {str(e)}")
+        print(f"Unexpected error during role generation: {str(e)}")
         raise
 
 def get_chat_history(session_id):

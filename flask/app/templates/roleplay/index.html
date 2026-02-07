@@ -40,7 +40,7 @@
                                     roleplay chat
                                 </h6>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body"> // this one is not needed 
                                 <div class="form-group mb-3">
                                     <label
                                         for="subject-input"
@@ -82,7 +82,7 @@
                                     >
                                 </div>
 
-                                <div class="form-group mb-3">
+                                <div class="form-group mb-3"> // this one is also not needed 
                                     <label
                                         for="custom-role-brief"
                                         class="form-label fw-bold"
@@ -263,14 +263,6 @@
 
         if (!roleName) {
             alert("Prosím, zadejte název vlastní role.");
-            return;
-        }
-        if (!roleBrief) {
-            alert("Prosím, zadejte krátký popis vlastní role.");
-            return;
-        }
-        if (!subject) {
-            alert("Prosím, zadejte předmět/oblast specializace.");
             return;
         }
 
@@ -631,11 +623,6 @@
         const roleTitle = selectedOption.text;
         const roleBrief = selectedOption.dataset.brief;
         const subject = aiSubjectInput.value.trim(); // Use AI subject input from modal
-
-        if (!subject) {
-            alert("Prosím, zadejte téma nebo předmět.");
-            return;
-        }
 
         // Close the modal
         $("#aiRolesModal").modal("hide");

@@ -18,9 +18,7 @@ from .chat_utils import (
     get_chat_history,
     save_chat_history,
     get_role_by_id,
-    prepare_messages_for_ai,
-    count_assistant_messages,
-    call_openai_chat_completion,
+    generate_roles_from_subject,
     generate_session_id_for_roleplay_chat
 )
 from .ai_prompts import (
@@ -97,107 +95,44 @@ def get_roles():
         }), 200
     
     try:
-        # Use the centralized role generation system prompt
-        messages_for_openai = [
-            {
-                "role": "system",
-                "content": ROLE_GENERATION_SYSTEM_PROMPT
-            },
-            {
-                "role": "user",
-                "content": f"předmět: {subject}"
-            }
-        ]
-        
-        content = call_openai_chat_completion(
-            model=ROLE_GENERATION_MODEL, 
-            messages=messages_for_openai,
+        # Generate roles using AI with strict structured outputs
+        content = generate_roles_from_subject(
+            subject=subject,
+            model=ROLE_GENERATION_MODEL,
             request_timeout=ROLE_GENERATION_TIMEOUT
         )
         
-        print(f"Raw OpenAI response for subject '{subject}': {repr(content)}")
+        print(f"Raw AI response for subject '{subject}': {repr(content)}")
         
-        # Try to clean the response if it has extra text
-        content_cleaned = content.strip()
-        
-        # Multiple attempts to extract valid JSON
-        roles_data = None
-        
-        # Attempt 1: Direct JSON parsing
+        # Parse JSON response - guaranteed valid with strict schema
         try:
-            roles_data = json.loads(content_cleaned)
-            print(f"Successfully parsed JSON on first attempt for subject: {subject}")
-        except json.JSONDecodeError:
-            print(f"First JSON parse attempt failed for subject: {subject}")
+            response_data = json.loads(content)
+            roles_data = response_data.get('roles', [])
             
-            # Attempt 2: Remove any text before and after JSON array
-            import re
-            json_match = re.search(r'(\[.*?\])', content_cleaned, re.DOTALL)
-            if json_match:
-                content_cleaned = json_match.group(1)
-                print(f"Extracted JSON pattern: {repr(content_cleaned)}")
-                try:
-                    roles_data = json.loads(content_cleaned)
-                    print(f"Successfully parsed JSON on second attempt for subject: {subject}")
-                except json.JSONDecodeError:
-                    print(f"Second JSON parse attempt failed for subject: {subject}")
+            if not roles_data:
+                print(f"No roles in response for subject: {subject}")
+                return jsonify({"error": "AI nevrátila žádné role."}), 500
+                
+            print(f"Successfully parsed {len(roles_data)} roles for subject: {subject}")
+            
+        except json.JSONDecodeError as e:
+            print(f"JSON parse failed for subject '{subject}': {str(e)}")
+            return jsonify({"error": "Odpověď od AI nebyla validní JSON."}), 500
         
-        # If all JSON parsing attempts failed, return fallback roles
-        if roles_data is None:
-            print(f"All JSON parsing attempts failed for subject: {subject}. Using fallback roles.")
-            return jsonify({
-                "roles": [
-                    {
-                        "id": f"fallback_role_1_{subject.lower().replace(' ', '_')}",
-                        "title": f"Expert na {subject}",
-                        "brief": f"Zkušený specialista v oblasti {subject} s hlubokými znalostmi."
-                    },
-                    {
-                        "id": f"fallback_role_2_{subject.lower().replace(' ', '_')}",
-                        "title": f"Učitel {subject}",
-                        "brief": f"Pedagog s dlouholetými zkušenostmi ve výuce {subject}."
-                    },
-                    {
-                        "id": f"fallback_role_3_{subject.lower().replace(' ', '_')}",
-                        "title": f"Výzkumník v {subject}",
-                        "brief": f"Vědecký pracovník zaměřený na výzkum v oblasti {subject}."
-                    },
-                    {
-                        "id": f"fallback_role_4_{subject.lower().replace(' ', '_')}",
-                        "title": f"Praktik v {subject}",
-                        "brief": f"Praktický odborník využívající znalosti {subject}."
-                    },
-                    {
-                        "id": f"fallback_role_5_{subject.lower().replace(' ', '_')}",
-                        "title": f"Student {subject}",
-                        "brief": f"Pokročilý student oboru {subject} s velkým zájmem."
-                    }
-                ]
-            }), 200
-        
-        # Validate the structure of roles_data
-        if not isinstance(roles_data, list):
-            print(f"OpenAI response for roles was not a list for subject: {subject}. Response: {content}")
-            if roles_data == []:
-                return jsonify({"roles": []}), 200
-            return jsonify({"error": "Odpověď od AI pro generování rolí neměla očekávaný formát."}), 500
-
+        # Validate role structure (should be guaranteed by strict schema, but double-check)
         validated_roles = []
-        for role_candidate in roles_data:
-            if isinstance(role_candidate, dict) and \
-               'id' in role_candidate and \
-               'title' in role_candidate and \
-               'brief' in role_candidate:
+        for role in roles_data:
+            if isinstance(role, dict) and 'id' in role and 'title' in role and 'brief' in role:
                 validated_roles.append({
-                    "id": str(role_candidate['id']),
-                    "title": str(role_candidate['title']),
-                    "brief": str(role_candidate['brief'])
+                    "id": str(role['id']),
+                    "title": str(role['title']),
+                    "brief": str(role['brief'])
                 })
             else:
-                print(f"Malformed role object from OpenAI: {role_candidate} for subject: {subject}")
+                print(f"Malformed role object: {role}")
         
-        if not validated_roles and not (isinstance(roles_data, list) and not roles_data):
-            print(f"No valid roles were extracted from OpenAI response for subject: {subject}. Response: {content}")
+        if not validated_roles:
+            print(f"No valid roles after validation for subject: {subject}")
             return jsonify({"error": "AI nevrátila žádné validní role."}), 500
         
         return jsonify({"roles": validated_roles}), 200
