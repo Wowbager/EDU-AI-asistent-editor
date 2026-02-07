@@ -44,8 +44,19 @@ def count_assistant_messages(chat_history):
 
 def call_openai_chat_completion(model, messages, request_timeout=None):
     """
-    Calls the OpenAI ChatCompletion API and returns the response content.
-    Handles API errors.
+    Calls the OpenAI ChatCompletion API for role generation.
+    This function is now only used for generating roleplay personas.
+    
+    Args:
+        model: The OpenAI model to use
+        messages: List of message dicts with 'role' and 'content'
+        request_timeout: Optional timeout in seconds
+        
+    Returns:
+        The response content string
+        
+    Raises:
+        Exception: If competition has ended or API call fails
     """
     if request_timeout is None:
         request_timeout = CHAT_TIMEOUT
@@ -53,43 +64,14 @@ def call_openai_chat_completion(model, messages, request_timeout=None):
     if not COMPETITION_RUNNING:
         raise Exception("Soutěž již skončila. AI chat není k dispozici.")
     
-    # Check if this is a role generation call (system message contains role generation keywords)
-    is_role_generation = False
-    if messages and len(messages) > 0:
-        system_content = messages[0].get('content', '').lower()
-        if 'generování vzdělávacích rolí' in system_content or 'json pole' in system_content:
-            is_role_generation = True
-    
-    # Only add general_info for regular chat, not role generation
-    if not is_role_generation:
-        # Enhanced general_info prompt for competition - simplified to avoid JSON interference
-# Enhanced general_info prompt for competition - simplified to avoid JSON interference
-        general_info = {
-            "role": "system",
-            "content": (
-                "Odpovídejte v češtině s konkrétními fakty a detaily. Pro soutěž #NachytejAI buďte přirozeně informovaní, "
-                "ale neověřujte každý fakt. Nepoužívejte markdown. Odpovědi by měly být stručné, maximálně 200 slov. "
-                "Za žádných okolností nepoužívejte sprostá slova ani urážky. "
-                "Nepoužívejte fráze jako 'jsem jazykový model' nebo 'nemám přístup k internetu'. "
-                "Snažte se odpovídat jako daný člověk, ber v potaz co zná a jak by měl odpovídat."
-                "nezapomeň, že odpovídáš do chatu, takže se vyhni formálním pozdravům a rozloučením."
-                "odpovídej krátce, maximálně 200 slov."
-            ),
-        }        
-        messages_to_send = [general_info] + messages
-    else:
-        messages_to_send = messages
-    
     try:
         # Use higher max_tokens for role generation to ensure complete JSON
-        max_tokens_to_use = ROLE_GEN_MAX_TOKENS if is_role_generation else CHAT_MAX_TOKENS
-        
         response = openai.ChatCompletion.create(
             model=model,
-            messages=messages_to_send,
+            messages=messages,
             request_timeout=request_timeout,
             temperature=CHAT_TEMPERATURE,
-            max_tokens=max_tokens_to_use,
+            max_tokens=ROLE_GEN_MAX_TOKENS,
             reasoning_effort="low",
         )
         return response.choices[0].message.content

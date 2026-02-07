@@ -24,7 +24,6 @@ from .chat_utils import (
     generate_session_id_for_roleplay_chat
 )
 from .ai_prompts import (
-    create_roleplay_system_prompt,
     prepare_session_prompt,
     ROLE_GENERATION_SYSTEM_PROMPT,
     GENERAL_INSTRUCTIONS
@@ -210,154 +209,6 @@ def get_roles():
         print(f"Unexpected error during get_roles for subject '{subject}': {str(e)}")
         traceback.print_exc()
         return jsonify({"error": f"Chyba při generování rolí: {str(e)}"}), 500
-
-@roleplay.route("/chat", methods=["POST"])
-@login_required
-def chat():
-    """
-    Chat with an AI roleplay persona.
-    
-    Request JSON:
-        {
-            "session_id": optional UUID,
-            "role_id": string,
-            "message": string
-        }
-    
-    Returns:
-        JSON with session_id and assistant's reply
-    """
-    if not COMPETITION_RUNNING:
-        return jsonify({"error": "Soutěž již skončila. Chat není k dispozici."}), 403
-    
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({"error": "Chybějící tělo požadavku"}), 400
-    role_id = data.get("role_id")
-    message = data.get("message")
-    if not role_id:
-        return jsonify({"error": "Chybějící povinné pole: role_id"}), 400
-    
-    session_id = data.get("session_id")
-    if message is None:
-        return jsonify({"error": "Chybějící povinné pole: message"}), 400
-    
-    # Check if this is a first message (likely custom instructions)
-    is_first_message = session_id is None
-    
-    # Apply appropriate length limit
-    max_length = MAX_CUSTOM_INSTRUCTIONS_LENGTH if is_first_message else MAX_MESSAGE_LENGTH
-    
-    # Check message length
-    if len(message) > max_length:
-        return jsonify({"error": f"Zpráva překračuje maximální délku {max_length} znaků"}), 400
-    
-    try:
-        if not session_id:
-            chat_session = ChatSession(role_id=role_id, user_id=current_user.id)
-            db.session.add(chat_session)
-            db.session.commit()
-            session_id = chat_session.id
-            
-            current_role_title = None
-            current_role_brief = None
-            current_subject = data.get("subject")
-            if not current_subject:
-                current_subject = "nespecifikováno"
-
-            if role_id.startswith('custom-'):
-                current_role_title = data.get("role_title", "Vlastní role")
-                current_role_brief = data.get("role_brief", "Definovaná uživatelem")
-            else:
-                role_details = get_role_by_id(role_id)
-                if not role_details:
-                    return jsonify({"error": "Nepodařilo se načíst informace o roli."}), 400
-                current_role_title = role_details['title']
-                current_role_brief = role_details['brief']
-            
-            # Enhanced system prompt
-            system_prompt_content = (
-                f"Jsi AI asistent v roli '{current_role_title}' ({current_role_brief}) pro soutěž #NachytejAI. "
-                f"Specializuješ se na předmět '{current_subject}'. "
-                "DŮLEŽITÉ INSTRUKCE:\n"
-                "• Komunikuj výhradně v češtině.\n"
-                "• Uváděj přesná data, místa, čísla, jména a události.\n"
-                "• Buď historicky přesný, ale odpovídej přirozeně i na složité otázky.\n"
-                "• Poskytuj detaily o době, kultuře a událostech vztahujících se k tématu.\n"
-                "• Mluv v první osobě jako historická postava nebo expert.\n"
-                "• Nepoužívej markdown.\n"
-                "• Zaměř se pouze na oblast '{current_subject}'.\n"
-                "• Odpovídej přirozeně, i když si nejsi jistý všemi fakty."
-                "Na začátku se krátce představ a stručně řekni něco o sobě. První odpověď musí mít maximálně tři věty!"
-            )
-            
-            # For the first message, create chat history with system prompt and user instructions
-            chat_history = [
-                {"role": "system", "content": system_prompt_content},
-                {"role": "user", "content": message}
-            ]
-            
-            # For AI call on first message, use only system prompt
-            chat_history_for_ai = [
-                {"role": "system", "content": system_prompt_content}
-            ]
-        else:
-            chat_session = ChatSession.query.filter_by(id=session_id, user_id=current_user.id).first()
-            
-            if not chat_session:
-                return jsonify({"error": "Relace chatu nebyla nalezena nebo k ní nemáte přístup."}), 404
-            
-            chat_history = get_chat_history(session_id)
-            if not chat_history:
-                return jsonify({"error": "Nepodařilo se načíst historii chatu."}), 500
-            
-            # Add current user message to history
-            chat_history.append({
-                "role": "user",
-                "content": message
-            })
-            
-            # Filter messages for AI
-            chat_history_for_ai = prepare_messages_for_ai(chat_history)
-        
-        try:
-            # Check if chat has reached the maximum number of AI responses
-            num_assistant_messages = count_assistant_messages(chat_history)
-            if num_assistant_messages >= MAX_AI_RESPONSES:
-                return jsonify({"error": "Překročen maximální počet odpovědí AI v této relaci."}), 400
-                
-            # Use the filtered chat history for AI call
-            assistant_reply_content = call_openai_chat_completion(
-                model=CHAT_MODEL,
-                messages=chat_history_for_ai
-            )
-
-            chat_history.append({
-                "role": "assistant",
-                "content": assistant_reply_content
-            })
-            
-            save_chat_history(chat_session.id, chat_history)
-
-            print(f"{chat_history=}\n{chat_history_for_ai=}\n{assistant_reply_content=}", flush=True)
-
-            return jsonify({
-                "session_id": str(chat_session.id),
-                "reply": assistant_reply_content
-            }), 200
-            
-        except openai.error.OpenAIError as e:
-            print(f"OpenAI API error during chat: {str(e)}")
-            traceback.print_exc()
-            return jsonify({"error": f"Chyba API OpenAI: {str(e)}"}), 503
-        except Exception as e:
-            traceback.print_exc()
-            return jsonify({"error": f"Došlo k neočekávané chybě při zpracování chatu: {str(e)}"}), 500
-    
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": f"Chyba při zpracování požadavku na chat: {str(e)}"}), 500
 
 @roleplay.route("/chat/<session_id>", methods=["GET"])
 @login_required
@@ -1439,11 +1290,9 @@ def generate_session_id():
     if not role_id:
         return jsonify({"error": "Chybějící povinné pole: role_id"}), 400
     
-    # Generate all prompts using centralized prompt engineering module
+    # Generate system prompt using centralized prompt engineering module
     prompt = prepare_session_prompt(
         role_title=role_title,
-        role_description=role_brief, # not needed at the moment
-        subject=subject, # also not needed
         custom_instructions=user_custom_instructions
     )
     

@@ -69,82 +69,27 @@ PŘÍKLAD pro 'Starověký Řím':
 
 # ==================== HELPER FUNCTIONS ====================
 
-def create_roleplay_system_prompt(role_title: str, role_description: str, subject: str = "") -> str:
-    """
-    Create a system prompt for roleplay scenarios.
-    
-    Args:
-        role_title: Name/title of the role (e.g., "Albert Einstein")
-        role_description: Brief description of the role
-        subject: Optional subject/domain context
-        
-    Returns:
-        Formatted system prompt
-    """
-    base_prompt = f"Jsi {role_title}."
-    
-    if role_description:
-        base_prompt += f" {role_description}"
-    
-    if subject:
-        base_prompt += f" Jsi expert v oblasti '{subject}'."
-    
-    return base_prompt
-
-
-def create_first_user_message(
-    role_title: str,
-    role_description: str = "",
-    subject: str = "",
-    custom_instructions: str = ""
-) -> str:
-    """
-    Create the first user message to initialize the conversation.
-    
-    Args:
-        role_title: Name/title of the role
-        role_description: Brief description
-        subject: Subject/domain context
-        custom_instructions: Optional custom user instructions
-        
-    Returns:
-        Formatted first message
-    """
-    if custom_instructions:
-        # User provided custom instructions
-        return custom_instructions
-    
-    # Default first message
-    message = f"Představ se mi prosím jako {role_title}."
-    
-    if subject:
-        message += f" Stručně vysvětli svou specializaci v oblasti '{subject}'."
-    
-    message += " Řekni, jakým stylem budeš komunikovat. Poté vyčkej na mé pokyny."
-    
-    return message
-
-
 def prepare_session_prompt(
     role_title: str,
-    role_description: str,
-    subject: str = "",
     custom_instructions: str = ""
 ) -> str:
     """
-    Create all prompts needed for a chat session.
+    Create the system prompt for a roleplay chat session.
+    
+    This is the single source of truth for roleplay system prompts.
+    Combines general instructions with role identity and optional style customization.
     
     Args:
-        role_title: Title of the role
-        role_description: Brief description
-        subject: Subject/domain
-        custom_instructions: Optional custom instructions
+        role_title: Name/title of the role (e.g., "Albert Einstein", "Julius Caesar")
+        custom_instructions: Optional styling instructions (e.g., "mluv jednoduše", "používej humor")
         
     Returns:
-        A single string containing the combined prompt
+        Complete system prompt string ready for LangChain/OpenAI
     """
-    return "\n".join([
-        GENERAL_INSTRUCTIONS,
-        f"Role: {role_title}",
-        f"Styl: {custom_instructions}"
-        ]) 
+    prompt = GENERAL_INSTRUCTIONS.strip() + "\n\n"
+    prompt += f"Jsi {role_title}."
+    
+    if custom_instructions:
+        prompt += f"\n\nDoplňující instrukce k stylu: {custom_instructions}"
+    
+    return prompt 
