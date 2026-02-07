@@ -25,7 +25,7 @@ from .chat_utils import (
 )
 from .ai_prompts import (
     create_roleplay_system_prompt,
-    prepare_session_prompts,
+    prepare_session_prompt,
     ROLE_GENERATION_SYSTEM_PROMPT,
     GENERAL_INSTRUCTIONS
 )
@@ -1440,10 +1440,10 @@ def generate_session_id():
         return jsonify({"error": "Chybějící povinné pole: role_id"}), 400
     
     # Generate all prompts using centralized prompt engineering module
-    prompts = prepare_session_prompts(
+    prompt = prepare_session_prompt(
         role_title=role_title,
-        role_description=role_brief,
-        subject=subject,
+        role_description=role_brief, # not needed at the moment
+        subject=subject, # also not needed
         custom_instructions=user_custom_instructions
     )
     
@@ -1452,12 +1452,8 @@ def generate_session_id():
     messages = [
         {
             "role": "system",
-            "content": prompts['system_prompt']
+            "content": prompt
         },
-        {
-            "role": "system", 
-            "content": prompts['general_info']
-        }
     ]
     
     # Prepare role information for FastAPI

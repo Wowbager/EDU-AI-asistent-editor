@@ -8,7 +8,7 @@ import os
 # ==================== AI MODEL CONFIGURATION ====================
 
 # Primary chat model for roleplay
-CHAT_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4.1')
+CHAT_MODEL = os.getenv('OPENAI_MODEL', 'gpt-5-mini')
 CHAT_TEMPERATURE = float(os.getenv('CHAT_TEMPERATURE', '0.7'))
 CHAT_MAX_TOKENS = int(os.getenv('CHAT_MAX_TOKENS', '500'))
 
@@ -36,13 +36,8 @@ MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1500  # First message with custom instructions
 
 # General instructions applied to all chat conversations
 GENERAL_INSTRUCTIONS = """
-Odpovídejte v češtině s konkrétními fakty a detaily. Pro soutěž #NachytejAI buďte přirozeně informovaní, 
-ale neověřujte každý fakt. Nepoužívejte žádný markdown, odpověď musí být bez formátování. Odpovědi by měly být stručné, maximálně 200 slov. 
-Za žádných okolností nepoužívejte sprostá slova ani urážky. 
-Nepoužívejte fráze jako 'jsem jazykový model' nebo 'nemám přístup k internetu'. 
-Snažte se odpovídat jako daný člověk, ber v potaz co zná a jak by měl odpovídat.
-nezapomeň, že odpovídáš do chatu, takže se vyhni formálním pozdravům a rozloučením.
-odpovídej krátce, maximálně 200 slov. Tvoje odpovědi musí být vhodné do chatu, nepiš formálně.
+Jsi role-play chatbot pro žáky. Odpovídejte v češtině s konkrétními fakty a detaily podle zadané osoby. Odpovědi musí být stručné, maximálně 50 slov, generuj prostý text bez markdown formátování. 
+Buď vstřícný, přizpůsob se roli, ale za žádných okolností nepoužívej sprostá slova ani urážky. Vyhni se formálním pozdravům a loučení, nevyhledávej na internetu a nepoužívej fráze jako 'jsem jazykový model' nebo 'nemám přístup k internetu'.  Snažte se odpovídat jako daná osoba, ber v potaz co zná a jakým stylem hovoří. 
 """
 
 # System prompt for role generation
@@ -130,12 +125,12 @@ def create_first_user_message(
     return message
 
 
-def prepare_session_prompts(
+def prepare_session_prompt(
     role_title: str,
     role_description: str,
     subject: str = "",
     custom_instructions: str = ""
-) -> dict:
+) -> str:
     """
     Create all prompts needed for a chat session.
     
@@ -146,12 +141,10 @@ def prepare_session_prompts(
         custom_instructions: Optional custom instructions
         
     Returns:
-        Dictionary with 'system_prompt', 'general_info', and 'first_message'
+        A single string containing the combined prompt
     """
-    return {
-        'system_prompt': create_roleplay_system_prompt(role_title, role_description, subject),
-        'general_info': GENERAL_INSTRUCTIONS,
-        'first_message': create_first_user_message(
-            role_title, role_description, subject, custom_instructions
-        )
-    }
+    return "\n".join([
+        GENERAL_INSTRUCTIONS,
+        f"Role: {role_title}",
+        f"Styl: {custom_instructions}"
+        ]) 

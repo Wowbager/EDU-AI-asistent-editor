@@ -16,9 +16,9 @@ class GlobalRateLimiter:
         # Keys are the *upper bound* of requests for that model tier
         base = 10
         self.models_by_traffic = {
-            base: "gpt-4.1",
-            base * 5: "gpt-4.1-mini", 
-            base * 10: "gpt-4.1-nano", 
+            base: "gpt-5-mini",
+            base * 5: "gpt-5-mini", 
+            base * 10: "gpt-5-mini", 
         }
         # Sort thresholds for reliable iteration
         self._sorted_thresholds = sorted(self.models_by_traffic.keys())

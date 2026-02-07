@@ -13,7 +13,7 @@ class AIModelConfig:
     """Configuration for AI models used in the application"""
     
     # Primary chat model
-    CHAT_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+    CHAT_MODEL = os.getenv('OPENAI_MODEL', 'gpt-5-mini')
     CHAT_TEMPERATURE = float(os.getenv('CHAT_TEMPERATURE', '0.5'))
     CHAT_MAX_TOKENS = int(os.getenv('CHAT_MAX_TOKENS', '200'))
     

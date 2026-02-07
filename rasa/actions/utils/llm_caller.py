@@ -32,7 +32,7 @@ async def get_llm_response(message=None, chat=None, use_gemma=False, utter_messa
                     print(f"Ollama connection error, falling back to OpenAI. {e}", flush=True)
 
     # Fallback to OpenAI if Ollama is busy
-    model = await rate_limiter.get_model() if chat is not None else "gpt-4.1"
+    model = await rate_limiter.get_model() if chat is not None else "gpt-5-mini"
     chat_response = await openai.ChatCompletion.acreate(
         model=model,
         request_timeout=600,
