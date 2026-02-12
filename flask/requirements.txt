@@ -55,3 +55,4 @@ yarl==1.7.2
 hashids
 openai==0.27.8
 psutil
+sentry-sdk
