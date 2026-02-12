@@ -1,5 +1,3 @@
-"""Redis-backed rate limiter for webchat requests."""
-
 from redis.asyncio import Redis
 
 

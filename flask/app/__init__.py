@@ -10,6 +10,20 @@ from flask_cors import CORS
 import logging  # Added import
 from werkzeug.middleware.proxy_fix import ProxyFix  # Added import
 import re  # Added import for regular expressions
+import sentry_sdk
+
+
+if os.environ.get("SENTRY_DSN"):
+    sentry_sdk.init(
+        dsn=os.environ.get("SENTRY_DSN"),
+        # Add data like request headers and IP for users,
+        # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+        send_default_pii=True,
+        # Set traces_sample_rate to 1.0 to capture 100%
+        # of transactions for tracing.
+        traces_sample_rate=1.0,
+        # Profiling options require newer sentry-sdk versions.
+    )
 
 app = Flask(__name__)
 # Don't trust X-Forwarded-Proto since we're handling HTTP locally and Cloudflare handles HTTPS
@@ -162,13 +176,14 @@ from app.roleplay.views import roleplay
 app.register_blueprint(public)
 app.register_blueprint(admin, url_prefix="/admin")
 app.register_blueprint(roleplay, url_prefix="/soutez")
+"""
 try:
     from app.super_admin.views import super_admin
     app.register_blueprint(super_admin, url_prefix="/super-admin")
 except Exception as e:
     app.logger.error(f"Failed to register admin_panel blueprint: {e}")
     # Optionally, you can handle the error more gracefully or log it
-
+"""
 
 @app.errorhandler(404)
 def resource_not_found(e):

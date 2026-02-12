@@ -1,3 +1,5 @@
+"""FastAPI entrypoint for the webchat beta handler."""
+
 import asyncio
 import json
 import logging
@@ -47,7 +49,7 @@ async def startup() -> None:
         redis_client, settings.rate_limit_max_requests, settings.rate_limit_window_seconds
     )
     slot_cache = SlotCache(redis_client, settings.slot_cache_ttl_seconds)
-    query_cache = QueryCache(redis_client, ttl_seconds=300)  # 5 min cache for course/lecture data
+    query_cache = QueryCache(redis_client, ttl_seconds=300)
     action_bridge.set_slot_cache(slot_cache)
     await redis_client.ping()
     logger.info("Webchat beta handler started")
@@ -129,7 +131,7 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
     try:
         while True:
             data = await websocket.receive_text()
-            logger.info("Received WebSocket message: %s", data[:200])  # Log first 200 chars
+            logger.info("Received WebSocket message: %s", data[:200])
             
             try:
                 payload = DeepChatRequest(**json.loads(data))
@@ -152,7 +154,6 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
                 responses = await _run_action(conversation_id, user_text)
                 logger.info("Generated %d responses", len(responses))
                 
-                # Send each response as a separate JSON message
                 for response in responses:
                     response_json = json.dumps(response.as_payload())
                     logger.info("Sending response: %s", response_json[:200])

@@ -102,7 +102,7 @@ DŮLEŽITÉ ZÁSADY:
             return custom_instructions
         
         # Default first message
-        message = f"Představ se mi prosím jako {role_title}."
+        message = f"Představ se."
         
         if subject:
             message += f" Stručně vysvětli svou specializaci v oblasti '{subject}'."

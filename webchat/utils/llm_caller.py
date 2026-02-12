@@ -1,14 +1,16 @@
-import os
-import aiohttp
-import asyncio
+"""LLM access helpers with OpenAI and optional Ollama fallback."""
+
 import json
 import logging
+import os
+
+import aiohttp
 from langchain_openai import ChatOpenAI
+
 from ai_config import AIModelConfig
 
 logger = logging.getLogger(__name__)
 
-# Initialize LangChain ChatOpenAI model
 model = ChatOpenAI(
     model=AIModelConfig.CHAT_MODEL,
     temperature=AIModelConfig.CHAT_TEMPERATURE,
@@ -17,18 +19,7 @@ model = ChatOpenAI(
 )
 
 async def get_llm_response(message=None, chat=None, use_gemma=False, utter_message_sender=None):
-    """
-    Get LLM response using LangChain ChatOpenAI.
-    
-    Args:
-        message: Single message string (creates simple user message)
-        chat: Full chat history in OpenAI format [{"role": "user/assistant/system", "content": "..."}]
-        use_gemma: If True, try Ollama first, fallback to OpenAI
-        utter_message_sender: Optional callback for streaming (Ollama only)
-    
-    Returns:
-        String response from the model
-    """
+    """Return a response from OpenAI, optionally falling back from Ollama."""
     if chat is not None:
         messages = chat
     elif message is not None:
@@ -43,12 +34,11 @@ async def get_llm_response(message=None, chat=None, use_gemma=False, utter_messa
         except Exception as e:
             logger.warning("Ollama connection error, falling back to OpenAI: %s", e)
 
-    # Use LangChain for OpenAI
     try:
         response = await model.ainvoke(messages)
         return response.content
-    except Exception as e:
-        logger.error("OpenAI API error: %s", e)
+    except Exception as exc:
+        logger.error("OpenAI API error: %s", exc)
         return "Omlouvám se, nemohu nyní odpovědět. Zkuste to prosím později."
 
 
@@ -69,16 +59,14 @@ async def stream_ollama_chat(messages, utter_message_sender):
 
             full_msg = ""
             buffer = ""
-            # Read one JSON‐line at a time
             while True:
                 line_bytes = await resp.content.readline()
                 if not line_bytes:
-                    break  # connection closed
+                    break
                 line = line_bytes.decode().strip()
                 if not line:
                     continue
                 data = json.loads(line)
-                # Stop when Ollama signals completion
                 if data.get("done"):
                     break
                 fragment = data["message"]["content"]
@@ -88,13 +76,11 @@ async def stream_ollama_chat(messages, utter_message_sender):
                 if "\n" in buffer:
                     parts = buffer.split("\n")
                     for part in parts[:-1]:
-                        if part:
-                            ...
-                            # Rasa dispatcher does not support streaming, so we don't need the whole streaming functionality. But if we move to a different dispatcher that supports streaming, we can uncomment the next line.
-                            # utter_message_sender(text=part)
+                        if part and utter_message_sender:
+                            utter_message_sender(text=part)
                     buffer = parts[-1]
-            
-            if buffer:
+
+            if buffer and utter_message_sender:
                 utter_message_sender(text=buffer)
 
             return full_msg

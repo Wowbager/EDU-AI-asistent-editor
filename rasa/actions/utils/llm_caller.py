@@ -13,11 +13,11 @@ async def get_llm_response(message=None, chat=None, use_gemma=False, utter_messa
         if not allowed:
             return "Omlouvám se, ale už jsem už jsem toho řekl dost. Napište mi kontakt a lidský kolega se vám ozve."
         messages = chat
-        temperature = 0.5
+        temperature = 1.0
         max_tokens = 200
     elif message is not None:
         messages = [{"role": "user", "content": message}]
-        temperature = 0.5
+        temperature = 1.0
         max_tokens = 200
     else:
         return ""
@@ -38,7 +38,7 @@ async def get_llm_response(message=None, chat=None, use_gemma=False, utter_messa
         request_timeout=600,
         messages=messages,
         temperature=temperature,
-        max_tokens=max_tokens,
+        max_completion_tokens=max_tokens,
     )
     return chat_response.choices[0].message.content
 

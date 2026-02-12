@@ -1,3 +1,5 @@
+"""Adapters and dispatchers for running actions and formatting responses."""
+
 from __future__ import annotations
 
 import logging
@@ -30,61 +32,48 @@ class RasaDispatcher:
         """Queue a bot message following Rasa webchat protocol."""
         timestamp = int(time.time() * 1000)
         
-        # Text message with optional buttons (quick_replies)
         if text or buttons:
             message: Dict[str, Any] = {}
-            
-            # Only add text if it's not empty
             if text and text.strip():
-                message['text'] = text
-            
-            # Add buttons as quick_replies in Rasa format
+                message["text"] = text
+
             if buttons:
-                message['quick_replies'] = [
+                message["quick_replies"] = [
                     {
-                        'content_type': 'text',
-                        'title': btn.get('title', ''),
-                        'payload': btn.get('payload', btn.get('title', ''))
+                        "content_type": "text",
+                        "title": btn.get("title", ""),
+                        "payload": btn.get("payload", btn.get("title", "")),
                     }
                     for btn in buttons
                 ]
-                # If we have quick_replies but no text, add empty text
-                if 'text' not in message:
-                    message['text'] = ''
-            
-            # Only add message if it has content
-            if 'text' in message or 'quick_replies' in message:
+                if "text" not in message:
+                    message["text"] = ""
+
+            if "text" in message or "quick_replies" in message:
                 self.messages.append(message)
-        
-        # Image attachment
+
         if image:
-            self.messages.append({
-                'attachment': {
-                    'type': 'image',
-                    'payload': {
-                        'src': image
+            self.messages.append(
+                {
+                    "attachment": {
+                        "type": "image",
+                        "payload": {"src": image},
                     }
                 }
-            })
-        
-        # Custom attachment
+            )
+
         if attachment:
-            self.messages.append({
-                'attachment': attachment
-            })
+            self.messages.append({"attachment": attachment})
     
     def utter_custom_json(self, message: Dict[str, Any]) -> None:
         """Send custom JSON data."""
-        self.messages.append({
-            'data': message
-        })
+        self.messages.append({"data": message})
     
     async def send_all(self) -> None:
         """Send all queued messages to client with small delays."""
         import asyncio
         for i, msg in enumerate(self.messages):
-            await self.sio.emit('bot_uttered', msg, room=self.sid)
-            # Small delay between messages for better UX
+            await self.sio.emit("bot_uttered", msg, room=self.sid)
             if i < len(self.messages) - 1:
                 await asyncio.sleep(0.3)
         self.messages.clear()
@@ -105,23 +94,16 @@ class DeepChatDispatcher:
         button_type: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
-        # Handle text with or without buttons
         if text or buttons:
             html_content = ""
-            
-            # Add text content
             if text:
-                # Escape HTML and convert newlines to <br>
                 escaped_text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                 html_content = escaped_text.replace("\n", "<br>")
-            
-            # Add buttons as clickable HTML elements
             if buttons:
                 button_html = '<div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">'
                 for button in buttons:
                     title = button.get("title", "")
                     payload = button.get("payload", title)
-                    # Create a clickable button that sends the payload when clicked
                     button_html += f'''
                     <button 
                         onclick="document.querySelector('deep-chat').submitUserMessage('{payload}')"
@@ -137,14 +119,12 @@ class DeepChatDispatcher:
             
             if html_content:
                 self.messages.append(DeepChatResponse(html=html_content))
-        
-        # Handle images as separate file messages
+
         if image:
             self.messages.append(
                 DeepChatResponse(files=[{"name": image.split("/")[-1], "src": image}])
             )
-        
-        # Handle attachments
+
         if attachment:
             self.messages.append(DeepChatResponse(text=str(attachment)))
 
@@ -200,7 +180,6 @@ class ActionBridge:
         self.slot_cache = slot_cache
 
     def set_slot_cache(self, slot_cache) -> None:
-        """Set the slot cache after initialization."""
         self.slot_cache = slot_cache
 
     async def run(
@@ -212,16 +191,12 @@ class ActionBridge:
             raise ValueError(f"Unknown action {action_name}")
 
         try:
-            # Inject slot_cache into action if it supports it
-            if hasattr(action, 'slot_cache'):
+            if hasattr(action, "slot_cache"):
                 action.slot_cache = self.slot_cache
-            
-            # Run action and capture returned events
             events = await action.run(dispatcher, tracker, {})
             return events if events else []
         except Exception as exc:  # noqa: BLE001
             logger.exception("Action %s failed", action_name)
-            # Send error message
-            if hasattr(dispatcher, 'utter_message'):
+            if hasattr(dispatcher, "utter_message"):
                 dispatcher.utter_message(text="Došlo k neočekávané chybě.")
             return []

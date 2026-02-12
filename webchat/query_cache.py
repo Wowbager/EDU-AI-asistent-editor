@@ -15,20 +15,13 @@ class QueryCache:
     """Cache database query results in Redis."""
 
     def __init__(self, redis: Redis, ttl_seconds: int = 300) -> None:
-        """
-        Initialize query cache.
-        
-        Args:
-            redis: Redis client
-            ttl_seconds: Cache TTL (default: 5 minutes for course/lecture data)
-        """
+        """Initialize query cache."""
         self._redis = redis
         self._ttl = ttl_seconds
 
     @staticmethod
     def _make_key(sql: str, params: List[Any]) -> str:
         """Generate cache key from SQL and parameters."""
-        # Create a stable hash of the query and params
         query_str = f"{sql}:{json.dumps(params, sort_keys=True)}"
         hash_val = hashlib.md5(query_str.encode()).hexdigest()
         return f"webchat:qcache:{hash_val}"
@@ -36,27 +29,14 @@ class QueryCache:
     async def get_cached_row(
         self, sql: str, params: List[Any], ttl: Optional[int] = None
     ) -> Optional[Dict[str, Any]]:
-        """
-        Get single row with caching.
-        
-        Args:
-            sql: SQL query
-            params: Query parameters
-            ttl: Override default TTL for this query
-        """
+        """Get a single row with caching."""
         cache_key = self._make_key(sql, params)
-        
-        # Try cache first
         cached = await self._redis.get(cache_key)
         if cached:
             logger.debug("Query cache hit: %s", sql[:50])
             return json.loads(cached) if cached != "null" else None
-        
-        # Cache miss - query database
         logger.debug("Query cache miss: %s", sql[:50])
         result = await get_db_row(sql, params)
-        
-        # Store in cache (including None results to prevent repeated queries)
         cache_ttl = ttl if ttl is not None else self._ttl
         await self._redis.set(
             cache_key,
@@ -68,27 +48,14 @@ class QueryCache:
     async def get_cached_all(
         self, sql: str, params: List[Any], ttl: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """
-        Get all rows with caching.
-        
-        Args:
-            sql: SQL query
-            params: Query parameters
-            ttl: Override default TTL for this query
-        """
+        """Get all rows with caching."""
         cache_key = self._make_key(sql, params)
-        
-        # Try cache first
         cached = await self._redis.get(cache_key)
         if cached:
             logger.debug("Query cache hit: %s", sql[:50])
             return json.loads(cached)
-        
-        # Cache miss - query database
         logger.debug("Query cache miss: %s", sql[:50])
         result = await get_db_all(sql, params)
-        
-        # Store in cache
         cache_ttl = ttl if ttl is not None else self._ttl
         await self._redis.set(
             cache_key,
@@ -98,15 +65,7 @@ class QueryCache:
         return result
 
     async def invalidate_pattern(self, pattern: str) -> int:
-        """
-        Invalidate all cache keys matching pattern.
-        
-        Args:
-            pattern: Redis key pattern (e.g., "webchat:qcache:*")
-            
-        Returns:
-            Number of keys deleted
-        """
+        """Invalidate all cache keys matching a pattern."""
         cursor = 0
         deleted = 0
         while True:

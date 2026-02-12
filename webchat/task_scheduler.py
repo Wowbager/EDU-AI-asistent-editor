@@ -1,4 +1,4 @@
-"""Simple async task scheduler for webchat - replaces Celery for web-only use."""
+"""Async in-memory scheduler for webchat reminders."""
 import asyncio
 import datetime
 import logging
@@ -25,27 +25,21 @@ class TaskScheduler:
         """Schedule a reminder to trigger after countdown seconds."""
         import uuid
         task_id = str(uuid.uuid4())
-        
-        # Store in database
         target_eta = datetime.datetime.now() + datetime.timedelta(seconds=countdown)
         target_datetime = target_eta.strftime("%Y-%m-%d %H:%M:%S")
         await get_db_row(
             "INSERT INTO `planned_tasks` (`sender_id`, `task_id`, `eta`) VALUES (%s, %s, %s)",
             [sender_id, task_id, target_datetime],
         )
-        
-        # Schedule async task
         async def delayed_callback():
             await asyncio.sleep(countdown)
             try:
                 await callback(*args, **kwargs)
             finally:
-                # Mark as finished
                 await get_db_row(
                     "UPDATE planned_tasks SET is_finished = 1 WHERE task_id = %s", 
                     [task_id]
                 )
-                # Clean up
                 if task_id in self._tasks:
                     del self._tasks[task_id]
         
@@ -58,7 +52,6 @@ class TaskScheduler:
         if task_id in self._tasks:
             self._tasks[task_id].cancel()
             del self._tasks[task_id]
-            # Note: DB update needs to be async, caller should use cancel_task_async
             return True
         return False
     
@@ -88,8 +81,6 @@ class TaskScheduler:
                 self._tasks[task_id].cancel()
                 del self._tasks[task_id]
                 count += 1
-            
-            # Mark as finished in DB
             await get_db_row(
                 "UPDATE planned_tasks SET is_finished = 1 WHERE task_id = %s", 
                 [task_id]
@@ -98,7 +89,6 @@ class TaskScheduler:
         return count
 
 
-# Global scheduler instance
 _scheduler: Optional[TaskScheduler] = None
 
 

@@ -1,5 +1,3 @@
-"""Application settings for the webchat beta handler."""
-
 import os
 from functools import lru_cache
 from typing import List
@@ -23,6 +21,7 @@ class Settings:
         self.slot_cache_ttl_seconds = int(os.getenv("WEBCHAT_SLOT_CACHE_TTL", "3600"))
         self.rate_limit_max_requests = int(os.getenv("WEBCHAT_RATE_LIMIT_MAX", "20"))
         self.rate_limit_window_seconds = int(os.getenv("WEBCHAT_RATE_LIMIT_WINDOW", "60"))
+        # Split and strip whitespace from each origin
         origins_str = os.getenv(
             "WEBCHAT_ALLOWED_ORIGINS",
             "http://localhost:3000,http://localhost:4173,https://go.edu-ai.eu",
@@ -31,6 +30,7 @@ class Settings:
         self.default_input_channel = os.getenv("WEBCHAT_INPUT_CHANNEL", "deepchat-web")
         self.default_course_id = os.getenv("WEBCHAT_DEFAULT_COURSE_ID")
 
+        # Deep Chat always sends a messages list. Keep a single action for beta.
         self.default_action_name = os.getenv("WEBCHAT_DEFAULT_ACTION", "action_quiz")
 
 

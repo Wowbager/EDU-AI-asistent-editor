@@ -4,7 +4,6 @@ import aiomysql
 from typing import Any, Dict, List, Optional
 
 
-# Connection pool for async operations
 _pool: Optional[aiomysql.Pool] = None
 
 
@@ -20,7 +19,7 @@ async def get_db_pool() -> aiomysql.Pool:
             autocommit=True,
             minsize=int(os.getenv("WEBCHAT_DB_POOL_MIN", "2")),
             maxsize=int(os.getenv("WEBCHAT_DB_POOL_MAX", "20")),
-            pool_recycle=3600,  # Recycle connections after 1 hour
+            pool_recycle=3600,
             connect_timeout=10,
         )
     return _pool

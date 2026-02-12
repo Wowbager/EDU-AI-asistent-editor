@@ -876,6 +876,7 @@ class ActionQuiz(Action):
                             selected_answer["following_action_id"],
                         )
                 else:
+                    response = ""
                     try:
                         _sorted_events = sorted(
                             events,
@@ -1121,6 +1122,7 @@ class ActionQuiz(Action):
                     except Exception as e:
                         print(f"openai handling error: {e}", flush=True)
                         print(f"Exception type: {type(e)}", flush=True)
+                        response = ""
                         dispatcher.utter_message(
                             "Omlouvám se, část mozku mi právě nefunguje."
                         )

@@ -1,4 +1,6 @@
-from typing import List, Literal, Optional
+"""Pydantic models for webchat API payloads."""
+
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -35,8 +37,8 @@ class DeepChatResponse(BaseModel):
     error: Optional[str] = None
     overwrite: Optional[bool] = None
 
-    def as_payload(self):
-        payload = {}
+    def as_payload(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
         if self.text:
             payload["text"] = self.text
         if self.html:

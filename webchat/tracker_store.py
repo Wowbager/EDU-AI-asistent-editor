@@ -1,3 +1,5 @@
+"""Redis-backed tracker store for conversation events."""
+
 import json
 import time
 from typing import Any, Dict, List, Optional
@@ -29,7 +31,6 @@ class RedisTrackerStore:
         raw = await self._redis.get(self._key(conversation_id))
         if raw:
             data = json.loads(raw)
-            # refresh ttl
             await self._redis.expire(self._key(conversation_id), self._ttl)
             return data
 

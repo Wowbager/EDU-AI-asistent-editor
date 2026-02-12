@@ -1,36 +1,23 @@
-"""
-AI Configuration and Prompt Engineering for EDU-AI Webchat
-This module centralizes all AI-related settings, prompts, and configurations
-for easier prompt engineering and model control.
-"""
+"""Centralized AI settings and prompt templates."""
+
 import os
-from typing import Dict, Any
+from typing import Any, Dict
 
-
-# ==================== MODEL CONFIGURATION ====================
 
 class AIModelConfig:
-    """Configuration for AI models used in the application"""
-    
-    # Primary chat model
-    CHAT_MODEL = os.getenv('OPENAI_MODEL', 'gpt-5-mini')
-    CHAT_TEMPERATURE = float(os.getenv('CHAT_TEMPERATURE', '0.5'))
-    CHAT_MAX_TOKENS = int(os.getenv('CHAT_MAX_TOKENS', '200'))
-    
-    # API settings
-    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-    REQUEST_TIMEOUT = int(os.getenv('CHAT_TIMEOUT', '600'))
-    
-    # Rate limiting
+    """Configuration for AI models used in the application."""
+
+    CHAT_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
+    CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.5"))
+    CHAT_MAX_TOKENS = int(os.getenv("CHAT_MAX_TOKENS", "200"))
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    REQUEST_TIMEOUT = int(os.getenv("CHAT_TIMEOUT", "600"))
     MAX_MESSAGE_LENGTH = 1000
 
 
-# ==================== PROMPT TEMPLATES ====================
-
 class PromptTemplates:
-    """Centralized prompt templates for consistent AI behavior"""
-    
-    # General instruction prompt (applied to all conversations)
+    """Centralized prompt templates for consistent AI behavior."""
+
     GENERAL_INSTRUCTIONS = """Odpovídejte v češtině s konkrétními fakty a detaily. Pro soutěž #NachytejAI buďte přirozeně informovaní, ale neověřujte každý fakt.
 
 DŮLEŽITÉ ZÁSADY:
@@ -43,18 +30,11 @@ DŮLEŽITÉ ZÁSADY:
 - Odpovídejte krátce a přirozeně"""
 
 
-# ==================== HELPER FUNCTIONS ====================
-
 def get_ai_config() -> Dict[str, Any]:
-    """
-    Get complete AI configuration as a dictionary
-    
-    Returns:
-        Dictionary with all AI settings
-    """
+    """Return AI configuration as a dictionary."""
     return {
-        'model': AIModelConfig.CHAT_MODEL,
-        'temperature': AIModelConfig.CHAT_TEMPERATURE,
-        'max_tokens': AIModelConfig.CHAT_MAX_TOKENS,
-        'timeout': AIModelConfig.REQUEST_TIMEOUT,
+        "model": AIModelConfig.CHAT_MODEL,
+        "temperature": AIModelConfig.CHAT_TEMPERATURE,
+        "max_tokens": AIModelConfig.CHAT_MAX_TOKENS,
+        "timeout": AIModelConfig.REQUEST_TIMEOUT,
     }

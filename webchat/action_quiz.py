@@ -1,7 +1,6 @@
-"""Standalone ActionQuiz implementation for webchat beta handler."""
+"""Standalone ActionQuiz implementation for the webchat beta handler."""
 from __future__ import annotations
 
-import json
 import logging
 import os
 from typing import Any, Dict, List, Optional, Text
@@ -22,14 +21,10 @@ class Action:
         raise NotImplementedError("Override run() in subclasses")
 
 
-# Slots are now handled via SlotCache in main.py
-# These functions are kept for backward compatibility but should use the cache
 async def get_slots(sender_id: str, slot_cache=None) -> Dict[str, Any]:
-    """Retrieve slots from cache (or database if cache not available)."""
+    """Retrieve slots from cache, falling back to the database."""
     if slot_cache:
         return await slot_cache.get_slots(sender_id)
-    
-    # Fallback to database (for backward compatibility)
     from db_utils import get_db_all
     tmp_query = await get_db_all(
         "SELECT * FROM events_slots WHERE sender_id = %s", [sender_id]
@@ -44,13 +39,10 @@ async def get_slots(sender_id: str, slot_cache=None) -> Dict[str, Any]:
 
 
 async def set_slot(sender_id: str, key: str, value: Any, slot_cache=None) -> None:
-    """Persist slot using cache (or database if cache not available)."""
+    """Persist slot using cache, falling back to the database."""
     if slot_cache:
         await slot_cache.set_slot(sender_id, key, value)
         return
-    
-    # Fallback to database (for backward compatibility)
-    # Use UPSERT to reduce queries
     from db_utils import get_db_row
     await get_db_row(
         """INSERT INTO events_slots (sender_id, key2find, value) 
@@ -61,7 +53,7 @@ async def set_slot(sender_id: str, key: str, value: Any, slot_cache=None) -> Non
 
 
 def translate_text(key: str) -> str:
-    """Translation stub - returns key as-is for beta."""
+    """Translation stub for beta deployments."""
     return key
 
 
@@ -167,13 +159,10 @@ class ActionQuiz(Action):
                 return []
             await set_slot(sender_id, "conversation_started", "1", self.slot_cache)
 
-        # Handle reset command
         if latest_message.lower() in ["reset", "restart"] and not slots.get("resetted"):
             dispatcher.utter_message(text=translate_text("Resetováno"))
-            # Clear slots without Celery task cancellation
             return []
 
-        # Handle gemma model switch
         if latest_message.lower() == "/use_gemma":
             dispatcher.utter_message(
                 text="Nyní bude využíván model gemma3 12b. Pokud jej chcete vypnout je nutné resetovat konverzaci."
@@ -181,7 +170,6 @@ class ActionQuiz(Action):
             await set_slot(sender_id, "use_gemma", "1", self.slot_cache)
             return []
 
-        # MFF Wiki query
         if "/w" in latest_message.lower() and len(latest_message) > 2 and not slots.get("command"):
             message2send = latest_message.split("/w")[1]
             await set_slot(sender_id, "command", "1", self.slot_cache)
@@ -216,7 +204,6 @@ class ActionQuiz(Action):
                 dispatcher.utter_message(text="Omlouvám se, část mozku mi právě nefunguje.")
                 return []
 
-        # Educational materials search
         if "/e" in latest_message.lower() and len(latest_message) > 2 and not slots.get("command"):
             import urllib.parse
 
@@ -227,7 +214,6 @@ class ActionQuiz(Action):
             )
             return []
 
-        # GPT conversation mode
         gpt_conversation = slots.get("gpt_conversation", "")
         if gpt_conversation in ["1", "edu", "max"] and latest_message != "/get_started":
             if latest_message.lower().strip() == "/model":
@@ -241,19 +227,12 @@ class ActionQuiz(Action):
                 )
                 return []
 
-            # Increment conversation counter
             await set_slot(sender_id, "gpt_conversation_counter", str(gpt_conversation_counter + 1), self.slot_cache)
-
-            # Build chat history for LLM
             events = tracker.current_state()["events"]
             chat_history = get_formated_chat_history(events, gpt_type=gpt_conversation)
-
-            # TODO: Integrate with LLM service (langchain-openai already in requirements)
             dispatcher.utter_message(
                 text="GPT conversation mode active - LLM integration pending for beta."
             )
             return []
-
-        # Default fallback
         dispatcher.utter_message(text="Beta handler received your message.")
         return []

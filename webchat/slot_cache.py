@@ -23,13 +23,10 @@ class SlotCache:
 
     async def get_slots(self, sender_id: str) -> Dict[str, Any]:
         """Retrieve slots from cache or database."""
-        # Try cache first
         cached = await self._redis.get(self._key(sender_id))
         if cached:
             logger.debug("Slots cache hit for %s", sender_id)
             return json.loads(cached)
-
-        # Cache miss - load from database
         logger.debug("Slots cache miss for %s, loading from DB", sender_id)
         tmp_query = await get_db_all(
             "SELECT * FROM events_slots WHERE sender_id = %s", [sender_id]
@@ -40,21 +37,17 @@ class SlotCache:
             for _slot in tmp_query:
                 slots[_slot["key2find"]] = _slot["value"]
 
-        # Store in cache
         await self._redis.set(self._key(sender_id), json.dumps(slots), ex=self._ttl)
         return slots
 
     async def set_slot(self, sender_id: str, key: str, value: Any) -> None:
         """Persist slot to database and update cache."""
-        # Update database - use UPSERT to reduce from 2-3 queries to 1
         await get_db_row(
             """INSERT INTO events_slots (sender_id, key2find, value) 
                VALUES (%s, %s, %s)
                ON DUPLICATE KEY UPDATE value = %s""",
             [sender_id, key, value, value],
         )
-
-        # Update cache
         slots = await self.get_slots(sender_id)
         slots[key] = value
         await self._redis.set(self._key(sender_id), json.dumps(slots), ex=self._ttl)
