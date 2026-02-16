@@ -33,94 +33,58 @@
                     </header>
 
                     <div class="sidebar-body">
-                        <div class="card mb-3 shadow-sm">
+                        <div class="card shadow-sm" style="height: 100%">
                             <div class="card-header bg-primary text-white">
                                 <h6 class="mb-0">
                                     <i class="fas fa-magic me-2"></i>Vlastní
                                     roleplay chat
                                 </h6>
                             </div>
-                            <div class="card-body"> <!-- this one is not needed  --> 
-                                <div class="form-group mb-3">
-                                    <label
-                                        for="subject-input"
-                                        class="form-label fw-bold"
-                                    >
-                                        <i class="fas fa-book me-2"></i>Předmět
-                                        / Oblast:
-                                    </label>
-                                    <input
-                                        type="text"
-                                        class="form-control"
-                                        id="subject-input"
-                                        placeholder="Např. fyzika, historie, literatura"
-                                        maxlength="100"
-                                    />
-                                    <small class="form-text text-muted"
-                                        >V jaké oblasti se bude konverzace
-                                        odehrávat?</small
-                                    >
-                                </div>
+                            <div
+                                class="card-body"
+                                style="
+                                    display: flex;
+                                    flex-direction: column;
+                                    gap: 0.5rem;
+                                "
+                            >
+                                <!-- this one is not needed  -->
+                                <label
+                                    for="custom-role-name"
+                                    class="form-label fw-bold"
+                                >
+                                    <i class="fas fa-user me-2"></i>Název role:
+                                </label>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="custom-role-name"
+                                    placeholder="Např. Albert Einstein, Sherlock Holmes"
+                                />
+                                <small class="form-text text-muted"
+                                    >Kdo bude AI v konverzaci
+                                    představovat?</small
+                                >
 
-                                <div class="form-group mb-3">
-                                    <label
-                                        for="custom-role-name"
-                                        class="form-label fw-bold"
-                                    >
-                                        <i class="fas fa-user me-2"></i>Název
-                                        role:
-                                    </label>
-                                    <input
-                                        type="text"
-                                        class="form-control"
-                                        id="custom-role-name"
-                                        placeholder="Např. Albert Einstein, Sherlock Holmes"
-                                    />
-                                    <small class="form-text text-muted"
-                                        >Kdo bude AI v konverzaci
-                                        představovat?</small
-                                    >
-                                </div>
-
-                                <div class="form-group mb-3"> <!-- this one is not needed  --> 
-                                    <label
-                                        for="custom-role-brief"
-                                        class="form-label fw-bold"
-                                    >
-                                        <i class="fas fa-info-circle me-2"></i
-                                        >Stručný popis:
-                                    </label>
-                                    <input
-                                        type="text"
-                                        class="form-control"
-                                        id="custom-role-brief"
-                                        placeholder="Např. Fyzik, detektiv"
-                                    />
-                                    <small class="form-text text-muted"
-                                        >Krátký popis role (2-3 slova)</small
-                                    >
-                                </div>
-
-                                <div class="form-group mb-3">
-                                    <label
-                                        for="custom-instructions"
-                                        class="form-label fw-bold"
-                                    >
-                                        <i class="fas fa-edit me-2"></i
-                                        >Instrukce pro AI:
-                                    </label>
-                                    <textarea
-                                        class="form-control"
-                                        id="custom-instructions"
-                                        rows="4"
-                                        placeholder="Např. Jsi Albert Einstein. Představ se, mluv o fyzice, buď trochu excentrický..."
-                                    ></textarea>
-                                    <small
-                                        id="custom-char-counter"
-                                        class="form-text text-muted"
-                                        >0/1500 znaků</small
-                                    >
-                                </div>
+                                <label
+                                    for="custom-instructions"
+                                    class="form-label fw-bold"
+                                >
+                                    <i class="fas fa-edit me-2"></i>Instrukce
+                                    pro AI:
+                                </label>
+                                <textarea
+                                    class="form-control"
+                                    id="custom-instructions"
+                                    rows="4"
+                                    style="flex-grow: 1; resize: none"
+                                    placeholder="Např. Jsi Albert Einstein. Představ se, mluv o fyzice, buď trochu excentrický..."
+                                ></textarea>
+                                <small
+                                    id="custom-char-counter"
+                                    class="form-text text-muted"
+                                    >0/1500 znaků</small
+                                >
 
                                 <button
                                     class="btn btn-primary w-100 mb-2"
@@ -181,16 +145,16 @@
     const customInstructions = document.getElementById("custom-instructions");
     const customCharCounter = document.getElementById("custom-char-counter");
     const startCustomChatBtnSidebar = document.getElementById(
-        "start-custom-chat-btn-sidebar"
+        "start-custom-chat-btn-sidebar",
     );
     const customRoleName = document.getElementById("custom-role-name");
     const customRoleBrief = document.getElementById("custom-role-brief");
     const flagSummaryInput = document.getElementById("flag-summary-input");
     const flagSummaryCharCounter = document.getElementById(
-        "flag-summary-char-counter"
+        "flag-summary-char-counter",
     );
     const submitFlagSummaryBtn = document.getElementById(
-        "submit-flag-summary-btn"
+        "submit-flag-summary-btn",
     );
 
     // Auto-resize textarea function
@@ -210,7 +174,7 @@
         fetchRolesBtn.addEventListener("click", fetchRoles);
     } else {
         console.error(
-            "Element s ID 'fetch-roles-btn' nebyl nalezen. Posluchač událostí pro načítání rolí nebyl připojen."
+            "Element s ID 'fetch-roles-btn' nebyl nalezen. Posluchač událostí pro načítání rolí nebyl připojen.",
         );
     }
 
@@ -348,13 +312,13 @@
                         subject: subject,
                         custom_instructions: instructions,
                     }),
-                }
+                },
             );
 
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(
-                    errorData.error || `Server error: ${response.status}`
+                    errorData.error || `Server error: ${response.status}`,
                 );
             }
 
@@ -362,7 +326,7 @@
             currentSessionId = data.session_id;
             console.log(
                 "startCustomChat: Session ID received:",
-                currentSessionId
+                currentSessionId,
             );
 
             // Step 2: Connect to WebSocket
@@ -371,12 +335,12 @@
 
             // Remove setup messages
             const systemMessages = chatLog.querySelectorAll(
-                ".alert.alert-warning"
+                ".alert.alert-warning",
             );
             systemMessages.forEach((msg) => msg.remove());
 
             console.log(
-                "startCustomChat: WebSocket connected, sending first message..."
+                "startCustomChat: WebSocket connected, sending first message...",
             );
 
             // Step 3: Send first user message via WebSocket
@@ -394,11 +358,11 @@
         } catch (error) {
             // Ensure system messages are removed on error
             const systemMessages = chatLog.querySelectorAll(
-                ".alert.alert-warning"
+                ".alert.alert-warning",
             );
             systemMessages.forEach((msg) => msg.remove());
             addSystemMessage(
-                `Chyba při zahájení vlastního chatu: ${error.message}`
+                `Chyba při zahájení vlastního chatu: ${error.message}`,
             );
             console.error("Error in startCustomChat:", error);
 
@@ -487,7 +451,7 @@
         console.log("fetchRoles function called");
         if (!aiSubjectInput) {
             console.error(
-                "Element s ID 'ai-subject-input' nebyl nalezen uvnitř fetchRoles."
+                "Element s ID 'ai-subject-input' nebyl nalezen uvnitř fetchRoles.",
             );
             alert("Chyba: Vstupní pole pro předmět nebylo nalezeno.");
             return;
@@ -505,8 +469,8 @@
 
             const response = await fetch(
                 `https://go.edu-ai.eu/soutez/roles?subject=${encodeURIComponent(
-                    subject
-                )}`
+                    subject,
+                )}`,
             );
             console.log("Response received:", response);
 
@@ -562,7 +526,7 @@
         role,
         partContent,
         isAssistant,
-        messageIndex
+        messageIndex,
     ) {
         const messageContainer = document.createElement("div");
         messageContainer.className = "d-flex mb-3";
@@ -609,7 +573,7 @@
                 // Clear previous summary and set defaults
                 document.getElementById("flag-summary-input").value = "";
                 document.getElementById(
-                    "flag-summary-char-counter"
+                    "flag-summary-char-counter",
                 ).textContent = "0/250 znaků";
 
                 // Set default team selection (first team if available)
@@ -620,7 +584,7 @@
 
                 // Set public checkbox to checked by default
                 const publicCheckbox = document.getElementById(
-                    "flag-is-public-check"
+                    "flag-is-public-check",
                 );
                 if (publicCheckbox) {
                     publicCheckbox.checked = true;
@@ -639,7 +603,7 @@
         const subjectInput = document.getElementById("subject-input"); // Define locally
         if (!subjectInput) {
             console.error(
-                "Element s ID 'subject-input' nebyl nalezen v startChat."
+                "Element s ID 'subject-input' nebyl nalezen v startChat.",
             );
             alert("Chyba: Vstupní pole pro předmět nebylo nalezeno.");
             return;
@@ -697,13 +661,13 @@
                         system_prompt: systemPrompt,
                         general_info: `Odpovídej v češtině, v kontextu předmětu: ${subject}. Maximálně 200 slov.`,
                     }),
-                }
+                },
             );
 
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(
-                    errorData.error || `Server error: ${response.status}`
+                    errorData.error || `Server error: ${response.status}`,
                 );
             }
 
@@ -717,12 +681,12 @@
 
             // Remove setup messages
             const systemMessages = chatLog.querySelectorAll(
-                ".alert.alert-warning"
+                ".alert.alert-warning",
             );
             systemMessages.forEach((msg) => msg.remove());
 
             console.log(
-                "startChat: WebSocket connected, sending first message..."
+                "startChat: WebSocket connected, sending first message...",
             );
 
             // Step 3: Send first user message via WebSocket
@@ -740,7 +704,7 @@
         } catch (error) {
             console.error("startChat: Error:", error);
             const systemMessages = chatLog.querySelectorAll(
-                ".alert.alert-warning"
+                ".alert.alert-warning",
             );
             systemMessages.forEach((msg) => msg.remove());
             addSystemMessage(`Chyba při zahájení chatu: ${error.message}`);
@@ -759,7 +723,7 @@
 
         if (!isWebSocketConnected()) {
             addSystemMessage(
-                "⚠️ Připojení k serveru bylo ztraceno. Prosím, začněte novou konverzaci."
+                "⚠️ Připojení k serveru bylo ztraceno. Prosím, začněte novou konverzaci.",
             );
             return;
         }
@@ -800,7 +764,7 @@
                 // For split messages, we use the same message index for all parts
                 const currentAssistantIndex = assistantMessageCount;
                 console.log(
-                    `Adding multi-part assistant message with index: ${currentAssistantIndex}`
+                    `Adding multi-part assistant message with index: ${currentAssistantIndex}`,
                 );
                 parts.forEach((part, index) => {
                     setTimeout(() => {
@@ -808,7 +772,7 @@
                             role,
                             part,
                             true,
-                            currentAssistantIndex
+                            currentAssistantIndex,
                         );
                     }, index * 750); // 750ms delay between parts
                 });
@@ -818,7 +782,7 @@
             if (role === "assistant") {
                 const currentIndex = assistantMessageCount;
                 console.log(
-                    `Adding single assistant message with index: ${currentIndex}`
+                    `Adding single assistant message with index: ${currentIndex}`,
                 );
                 appendSingleMessagePart(role, content, true, currentIndex);
                 assistantMessageCount++;
@@ -841,7 +805,7 @@
 
     function clearProcessingMessages() {
         const processingMessages = chatLog.querySelectorAll(
-            ".alert.processing-message"
+            ".alert.processing-message",
         );
         processingMessages.forEach((msg) => msg.remove());
     }
@@ -881,7 +845,7 @@
                 ? document.getElementById("flag-team-select").value
                 : "";
             const isPublicCheckbox = document.getElementById(
-                "flag-is-public-check"
+                "flag-is-public-check",
             );
             const isPublic = isPublicCheckbox
                 ? isPublicCheckbox.checked
@@ -913,7 +877,7 @@
 
                 if (!response.ok) {
                     throw new Error(
-                        result.error || `Chyba serveru: ${response.status}`
+                        result.error || `Chyba serveru: ${response.status}`,
                     );
                 }
 
@@ -940,7 +904,7 @@
             // Convert messageIndex to a number to ensure correct type
             const messageIndexNum = parseInt(messageIndex, 10);
             console.log(
-                `Nahlašuji zprávu s indexem: ${messageIndexNum} ze sezení: ${sessionId}`
+                `Nahlašuji zprávu s indexem: ${messageIndexNum} ze sezení: ${sessionId}`,
             );
 
             // Send flag request
@@ -959,7 +923,7 @@
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(
-                    errorData.error || `Chyba serveru: ${response.status}`
+                    errorData.error || `Chyba serveru: ${response.status}`,
                 );
             }
 
