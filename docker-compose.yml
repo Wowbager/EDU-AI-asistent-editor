@@ -170,7 +170,8 @@ services:
     restart: always
     env_file:
       - .env
-      - ./fastapi/.env
+    environment:
+      LANGSMITH_PROJECT: ${FASTAPI_LANGSMITH_PROJECT}
     volumes:
       - ./fastapi:/code
     networks:
@@ -185,7 +186,8 @@ services:
     restart: always
     env_file:
       - .env
-      - ./webchat/.env
+    environment:
+      LANGSMITH_PROJECT: ${WEBCHAT_LANGSMITH_PROJECT}
     volumes:
       - ./webchat:/code
     networks:

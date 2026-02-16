@@ -124,7 +124,9 @@
     let currentFlagData = null;
 
     // DOM elements
-    const subjectInput = document.getElementById("subject-input");
+    const subjectInput =
+        document.getElementById("subject-input") ||
+        document.getElementById("ai-subject-input");
     const aiSubjectInput = document.getElementById("ai-subject-input");
     const fetchRolesBtn = document.getElementById("fetch-roles-btn");
     const roleSelect = document.getElementById("role-select");
@@ -148,7 +150,9 @@
         "start-custom-chat-btn-sidebar",
     );
     const customRoleName = document.getElementById("custom-role-name");
-    const customRoleBrief = document.getElementById("custom-role-brief");
+    const customRoleBrief = document.getElementById("custom-role-brief") || {
+        value: "",
+    };
     const flagSummaryInput = document.getElementById("flag-summary-input");
     const flagSummaryCharCounter = document.getElementById(
         "flag-summary-char-counter",
@@ -188,6 +192,16 @@
         });
     }
 
+    const aiRolesModalEl = document.getElementById("aiRolesModal");
+    if (aiRolesModalEl) {
+        aiRolesModalEl.addEventListener("hide.bs.modal", () => {
+            const activeEl = document.activeElement;
+            if (activeEl && aiRolesModalEl.contains(activeEl)) {
+                activeEl.blur();
+            }
+        });
+    }
+
     startBtn.addEventListener("click", () => {
         // Get selected role data
         const selectedOption = roleSelect.options[roleSelect.selectedIndex];
@@ -216,6 +230,9 @@
         }
 
         // Close the modal
+        if (aiRolesModalEl && aiRolesModalEl.contains(document.activeElement)) {
+            document.activeElement.blur();
+        }
         $("#aiRolesModal").modal("hide");
 
         // Trigger custom chat (will validate and start)
