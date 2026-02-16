@@ -64,6 +64,7 @@
 
 .navigation-rail > .bottom {
     overflow: hidden;
+    height: 4rem;
 }
 
 .navigation-rail > .bottom > div,
@@ -95,7 +96,7 @@
         top: 0;
         left: -100%;
         width: 0;
-        z-index: 10;
+        z-index: 1000;
     }
 
     body.navigation-open .navigation-rail {
