@@ -2618,19 +2618,6 @@ body.rtl
     flex: 1 1;
     position: relative;
     min-width: 0;
-    display: flex;
-}
-.layout
-    .content
-    .sidebar-group
-    .sidebar
-    .list-group-item
-    .users-list-body
-    > div:first-child {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    flex: 1 1;
 }
 .layout .content .sidebar-group .sidebar .list-group-item .users-list-body h5 {
     white-space: nowrap;
@@ -3081,16 +3068,6 @@ body.rtl
     }
     .layout .content .chat .chat-footer {
         padding-bottom: 17px;
-    }
-    .layout
-        .content
-        .sidebar-group
-        .sidebar
-        .list-group-item
-        .users-list-body
-        .users-list-action {
-        display: flex;
-        flex-direction: row-reverse;
     }
     .layout
         .content

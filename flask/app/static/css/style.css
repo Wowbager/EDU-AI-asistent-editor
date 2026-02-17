@@ -988,7 +988,6 @@ a.choosecompany:hover {
     .list-group-item
     .users-list-body
     .users-list-action {
-    padding-left: 15px;
     position: relative;
 }
 
@@ -1159,4 +1158,3 @@ body.modal-open .layout {
 figure.avatar {
     margin-inline: 1rem;
 }
-

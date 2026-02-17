@@ -46,10 +46,7 @@
                                         </span>
                                     </figure>
                                     <div class="users-list-body">
-                                        <div>
-                                            <h5>{{ (session_data.session.role_title or 'Konverzace').replace('Role ', '') }}</h5>
-                                            <p>{{ session_data.session.role_brief or 'Chat konverzace' }}</p>
-                                        </div>
+                                        <h5>{{ (session_data.session.role_title or 'Konverzace').replace('Role ', '') }}</h5>
                                         <div class="users-list-action">
                                             <small class="text-muted">
                                                 {% if session_data.session.created_at %}
