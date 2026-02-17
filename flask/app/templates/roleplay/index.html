@@ -615,7 +615,7 @@
         }
 
         chatLog.appendChild(messageContainer);
-        chatLog.scrollTop = chatLog.scrollHeight;
+        messageContainer.scrollIntoView({ behavior: "smooth", block: "end" });
     }
 
     async function startChat() {
