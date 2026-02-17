@@ -989,6 +989,8 @@ a.choosecompany:hover {
     .users-list-body
     .users-list-action {
     position: relative;
+    display: flex;
+    flex-direction: row;
 }
 
 @media (max-width: 576px) {
