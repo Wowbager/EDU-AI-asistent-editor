@@ -1,0 +1,157 @@
+services:
+  flask:
+    build:
+      context: ./flask
+    restart: unless-stopped
+    env_file:
+      - path: ./.env.example
+        required: true
+      - path: ./.env
+        required: false
+    volumes:
+      - ./flask:/app
+    depends_on:
+      - mysql
+    networks:
+      - web
+      - internal
+    ports:
+      - "8000:8000"
+    command: gunicorn -w 2 -b :8000 app:app
+
+  mysql:
+    image: mysql:8.2
+    restart: unless-stopped
+    networks:
+      - internal
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-edu}
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+      - ./my.cnf:/etc/mysql/my.cnf
+
+  redis:
+    image: redis:6.2
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - ./redis_data:/data
+    networks:
+      - internal
+
+  rasa:
+    build:
+      context: ./rasa/
+    restart: unless-stopped
+    volumes:
+      - ./rasa:/app
+    env_file:
+      - path: ./.env.example
+        required: true
+      - path: ./.env
+        required: false
+    command:
+      - run
+      - --enable-api
+    depends_on:
+      - redis
+      - action_server
+    networks:
+      - internal
+      - web
+    ports:
+      - "5005:5005"
+
+  action_server:
+    build:
+      context: ./rasa/actions
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./rasa/actions:/app/actions
+    env_file:
+      - path: ./.env.example
+        required: true
+      - path: ./.env
+        required: false
+    networks:
+      - internal
+      - web
+    ports:
+      - "5055:5055"
+
+  worker:
+    build:
+      context: ./rasa/actions
+      dockerfile: Dockerfile-celery
+    restart: unless-stopped
+    networks:
+      - internal
+    env_file:
+      - path: ./.env.example
+        required: true
+      - path: ./.env
+        required: false
+    volumes:
+      - ./rasa/actions:/app
+    command: celery -A celery_app.celery worker -l info -c 1 --uid=nobody --gid=nogroup
+    depends_on:
+      - rabbit
+
+  rabbit:
+    image: rabbitmq:latest
+    restart: unless-stopped
+    networks:
+      - internal
+    ports:
+      - "5672:5672"
+
+  fastapi:
+    build:
+      context: ./fastapi
+    restart: unless-stopped
+    env_file:
+      - path: ./.env.example
+        required: true
+      - path: ./.env
+        required: false
+    environment:
+      LANGSMITH_PROJECT: ${FASTAPI_LANGSMITH_PROJECT:-fastapi-dev}
+    volumes:
+      - ./fastapi:/code
+    networks:
+      - web
+      - internal
+    ports:
+      - "6767:80"
+
+  webchat:
+    build:
+      context: ./webchat
+    restart: unless-stopped
+    env_file:
+      - path: ./.env.example
+        required: true
+      - path: ./.env
+        required: false
+    environment:
+      LANGSMITH_PROJECT: ${WEBCHAT_LANGSMITH_PROJECT:-webchat-dev}
+    volumes:
+      - ./webchat:/code
+    networks:
+      - web
+      - internal
+    depends_on:
+      - redis
+      - mysql
+    ports:
+      - "7070:80"
+
+networks:
+  web:
+    driver: bridge
+  internal:
+    driver: bridge
