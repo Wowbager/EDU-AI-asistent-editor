@@ -17,7 +17,9 @@ services:
       - internal
     ports:
       - "8000:8000"
-    command: gunicorn -w 2 -b :8000 app:app
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+    command: gunicorn --reload -w 2 -b :8000 app:app
 
   mysql:
     image: mysql:8.2
@@ -28,7 +30,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-edu}
     volumes:
-      - ./mysql_data:/var/lib/mysql
+      - mysql_data_dev:/var/lib/mysql
       - ./my.cnf:/etc/mysql/my.cnf
 
   redis:
@@ -56,6 +58,8 @@ services:
     command:
       - run
       - --enable-api
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
     depends_on:
       - redis
       - action_server
@@ -77,6 +81,8 @@ services:
         required: true
       - path: ./.env
         required: false
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
     networks:
       - internal
       - web
@@ -95,6 +101,8 @@ services:
         required: true
       - path: ./.env
         required: false
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
     volumes:
       - ./rasa/actions:/app
     command: celery -A celery_app.celery worker -l info -c 1 --uid=nobody --gid=nogroup
@@ -139,6 +147,7 @@ services:
         required: false
     environment:
       LANGSMITH_PROJECT: ${WEBCHAT_LANGSMITH_PROJECT:-webchat-dev}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
     volumes:
       - ./webchat:/code
     networks:
@@ -155,3 +164,6 @@ networks:
     driver: bridge
   internal:
     driver: bridge
+
+volumes:
+  mysql_data_dev:
