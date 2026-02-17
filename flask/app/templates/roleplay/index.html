@@ -408,7 +408,7 @@
         // Reset the message input
         msgInput.value = "";
         msgInput.disabled = false;
-        charCounter.textContent = "0/1000 znaků";
+        charCounter.textContent = "0/500 znaků";
         charCounter.className = "text-muted mt-1";
         msgInput.style.height = "50px";
         sendBtn.disabled = false;
@@ -430,7 +430,7 @@
     // Add clear button functionality
     clearBtn.addEventListener("click", () => {
         msgInput.value = "";
-        charCounter.textContent = "0/1000 znaků";
+        charCounter.textContent = "0/500 znaků";
         charCounter.className = "text-muted mt-1";
         msgInput.style.height = "50px";
         msgInput.focus();
@@ -446,22 +446,24 @@
     // Call auto-resize on input
     msgInput.addEventListener("input", () => {
         const currentLength = msgInput.value.length;
-        charCounter.textContent = `${currentLength}/1000 znaků`;
+        charCounter.textContent = `${currentLength}/500 znaků`;
 
         // Change color when approaching limit
-        if (currentLength >= 1000) {
+        if (currentLength >= 500) {
             charCounter.className = "text-danger font-weight-bold mt-1";
             msgInput.style.borderColor = "#dc3545";
-        } else if (currentLength > 800) {
+        } else if (currentLength > 400) {
             charCounter.className = "text-danger mt-1";
             msgInput.style.borderColor = "";
-        } else if (currentLength > 700) {
+        } else if (currentLength > 300) {
             charCounter.className = "text-warning mt-1";
             msgInput.style.borderColor = "";
         } else {
             charCounter.className = "text-muted mt-1";
             msgInput.style.borderColor = "";
         }
+
+        sendBtn.disabled = currentLength === 0 || currentLength > 500;
     });
     // Functions
     async function fetchRoles() {
@@ -746,8 +748,8 @@
         }
 
         // Check message length on frontend (consistent with backend)
-        if (message.length > 1000) {
-            addSystemMessage("Zpráva přesahuje maximální délku 1000 znaků");
+        if (message.length > 500) {
+            addSystemMessage("Zpráva přesahuje maximální délku 500 znaků");
             return;
         }
 
@@ -760,7 +762,7 @@
 
         // Clear input and reset character counter
         msgInput.value = "";
-        charCounter.textContent = "0/1000 znaků";
+        charCounter.textContent = "0/500 znaků";
         charCounter.className = "text-muted mt-1";
         msgInput.style.height = "50px";
 
