@@ -12,7 +12,7 @@
 
 @media (orientation: landscape) {
     .navigation-rail:hover {
-        width: 12rem;
+        width: 14rem;
         opacity: 1;
     }
 }

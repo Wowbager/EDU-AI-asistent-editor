@@ -60,7 +60,7 @@
                 <a
                     class="{% if request.endpoint == 'roleplay.roleplay_home' %}active{%endif%}"
                     href="{{url_for('roleplay.roleplay_home')}}"
-                    title="Chat"
+                    title="Nový chat"
                 >
                     <div class="nav-icon">
                         <svg
@@ -80,36 +80,7 @@
                             ></path>
                         </svg>
                     </div>
-                    Chat
-                </a>
-            </li>
-            <li>
-                <a
-                    class="{% if request.endpoint == 'roleplay.conversations' and request.args.get('show_public_flags') == 'true' %}active{%endif%}"
-                    href="{{url_for('roleplay.conversations', show_public_flags='true')}}"
-                    title="Zveřejněné zprávy"
-                >
-                    <div class="nav-icon">
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="feather feather-globe"
-                        >
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="2" y1="12" x2="22" y2="12"></line>
-                            <path
-                                d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
-                            ></path>
-                        </svg>
-                    </div>
-                    Zprávy
+                    Nový chat
                 </a>
             </li>
             {% if current_user.is_authenticated %}
@@ -140,36 +111,7 @@
                             ></path>
                         </svg>
                     </div>
-                    Konverzace
-                </a>
-            </li>
-            <li>
-                <a
-                    class="{% if request.endpoint == 'roleplay.teams' %}active{%endif%}"
-                    href="{{url_for('roleplay.teams')}}"
-                >
-                    <div class="nav-icon">
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="feather feather-users"
-                        >
-                            <path
-                                d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
-                            ></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                    </div>
-                    Týmy
+                    Moje konverzace
                 </a>
             </li>
             <li>
@@ -198,6 +140,66 @@
                         </svg>
                     </div>
                     Označené
+                </a>
+            </li>
+            {% endif %}
+            <li>
+                <a
+                    class="{% if request.endpoint == 'roleplay.conversations' and request.args.get('show_public_flags') == 'true' %}active{%endif%}"
+                    href="{{url_for('roleplay.conversations', show_public_flags='true')}}"
+                    title="Zveřejněné zprávy"
+                >
+                    <div class="nav-icon">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="feather feather-globe"
+                        >
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                            <path
+                                d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+                            ></path>
+                        </svg>
+                    </div>
+                    Zveřejněné
+                </a>
+            </li>
+            {% if current_user.is_authenticated %}
+            <li>
+                <a
+                    class="{% if request.endpoint == 'roleplay.teams' %}active{%endif%}"
+                    href="{{url_for('roleplay.teams')}}"
+                >
+                    <div class="nav-icon">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="feather feather-users"
+                        >
+                            <path
+                                d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                            ></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </div>
+                    Týmy
                 </a>
             </li>
             {% if current_user.is_super_admin %}
