@@ -1815,8 +1815,8 @@ body:not(.no-blur-effect) .modal.show .modal-dialog.modal-dialog-zoom {
     border-radius: 50%;
 }
 .avatar .avatar-title {
-    color: hsla(0, 0%, 100%, 0.8);
-    background: #d7d7d7;
+    color: #d5d5d5;
+    background: #2e2e2e;
     width: 100%;
     height: 100%;
     display: flex;
