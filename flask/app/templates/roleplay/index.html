@@ -90,8 +90,7 @@
                                     class="btn btn-primary w-100 mb-2"
                                     id="start-custom-chat-btn-sidebar"
                                 >
-                                    <i class="fas fa-rocket me-2"></i> Spustit
-                                    vlastní chat
+                                    <i class="fas fa-rocket me-2"></i> Spustit chat
                                 </button>
 
                                 <button
@@ -99,8 +98,7 @@
                                     data-toggle="modal"
                                     data-target="#aiRolesModal"
                                 >
-                                    <i class="fas fa-robot me-2"></i> Nebo
-                                    nechat AI vygenerovat role
+                                    <i class="fas fa-robot me-2"></i> Vygenerovat role od AI
                                 </button>
                             </div>
                         </div>
@@ -253,24 +251,17 @@
             }
 
             const data = await response.json();
-            const fallbackInstructions =
-                `Jsi ${roleTitle}. Odpovídej v češtině, drž se tématu '${subject || "obecné vzdělávání"}', ` +
-                "buď stručný, věcný a bezpečný pro školní prostředí.";
-
             customInstructions.value =
-                (data.instructions && data.instructions.trim()) ||
-                fallbackInstructions;
+                (data.instructions && data.instructions.trim()) || "";
         } catch (error) {
             console.error("Chyba při generování instrukcí role:", error);
             alert(`Nepodařilo se vygenerovat instrukce: ${error.message}`);
-            customInstructions.value =
-                `Jsi ${roleTitle}. Odpovídej v češtině, drž se tématu '${subject || "obecné vzdělávání"}', ` +
-                "buď stručný, věcný a bezpečný pro školní prostředí.";
+            customInstructions.value = "";
         } finally {
             customInstructions.readOnly = false;
             startBtn.disabled = false;
             customInstructions.dispatchEvent(new Event("input"));
-            customInstructions.focus();
+            await startCustomChat();
         }
     });
     sendBtn.addEventListener("click", sendMessage);
@@ -311,6 +302,12 @@
 
         if (!roleName) {
             alert("Prosím, zadejte název vlastní role.");
+            return;
+        }
+
+        if (!instructions) {
+            alert("Instrukce pro AI nesmí být prázdné.");
+            customInstructions.focus();
             return;
         }
 
@@ -396,9 +393,7 @@
             );
 
             // Step 3: Send first user message via WebSocket
-            const firstUserMessage =
-                instructions ||
-                `Představ se mi prosím, stručně vysvětli svou specializaci a řekni, jakým stylem budeš komunikovat.`;
+            const firstUserMessage = instructions;
             const sent = sendWebSocketMessage(firstUserMessage);
 
             if (!sent) {

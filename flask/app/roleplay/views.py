@@ -1251,6 +1251,9 @@ def generate_session_id():
     if not role_id:
         return jsonify({"error": "Chybějící povinné pole: role_id"}), 400
 
+    if not isinstance(user_custom_instructions, str) or not user_custom_instructions.strip():
+        return jsonify({"error": "Instrukce pro AI nesmí být prázdné."}), 400
+
     if len(user_custom_instructions) > MAX_CUSTOM_INSTRUCTIONS_LENGTH:
         return jsonify({"error": f"Vlastní instrukce jsou příliš dlouhé (max {MAX_CUSTOM_INSTRUCTIONS_LENGTH} znaků)."}), 400
     
