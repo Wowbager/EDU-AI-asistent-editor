@@ -16,10 +16,23 @@ from .config import (
     ROLE_GEN_MAX_TOKENS,
     CHAT_HISTORY_TTL
 )
+from .ai_prompts import BIFROST_API_BASE, BIFROST_API_KEY
 
-# Configure OpenAI to use Groq API
-openai.api_key = os.environ.get("GROQ_KEY")
-openai.api_base = "https://api.groq.com/openai/v1"
+# Configure OpenAI to use Bifrost as a unified OpenAI-compatible endpoint
+openai.api_key = BIFROST_API_KEY
+openai.api_base = BIFROST_API_BASE
+
+
+def _validate_prefixed_model(model: str) -> None:
+    if not isinstance(model, str) or "/" not in model:
+        raise ValueError(
+            "Invalid model format. Expected provider-prefixed model like 'openai/<model>' or 'groq/<model>'."
+        )
+    provider, _ = model.split("/", 1)
+    if provider not in {"openai", "groq"}:
+        raise ValueError(
+            "Invalid model provider prefix. Allowed prefixes are 'openai/' and 'groq/'."
+        )
 
 # Shared Redis client for roleplay module
 redis_client = redis.Redis(
@@ -61,15 +74,21 @@ def generate_roles_from_subject(subject: str, model: str, request_timeout: int) 
     """
     if not COMPETITION_RUNNING:
         raise Exception("Soutěž již skončila. Generování rolí není k dispozici.")
+
+    _validate_prefixed_model(model)
     
-    from .ai_prompts import ROLE_GENERATION_SYSTEM_PROMPT, ROLE_GENERATION_TEMPERATURE
+    from .ai_prompts import (
+        ROLE_GENERATION_SYSTEM_PROMPT,
+        ROLE_GENERATION_TEMPERATURE,
+        ROLE_NAME_COUNT,
+    )
     
     messages = [
         {"role": "system", "content": ROLE_GENERATION_SYSTEM_PROMPT},
         {"role": "user", "content": f"předmět: {subject}"}
     ]
     
-    # Define strict JSON schema for role generation
+    # Phase 1 schema: names only
     role_schema = {
         "type": "json_schema",
         "json_schema": {
@@ -80,14 +99,15 @@ def generate_roles_from_subject(subject: str, model: str, request_timeout: int) 
                 "properties": {
                     "roles": {
                         "type": "array",
+                        "minItems": ROLE_NAME_COUNT,
+                        "maxItems": ROLE_NAME_COUNT,
                         "items": {
                             "type": "object",
                             "properties": {
                                 "id": {"type": "string"},
-                                "title": {"type": "string"},
-                                "brief": {"type": "string"}
+                                "title": {"type": "string"}
                             },
-                            "required": ["id", "title", "brief"],
+                            "required": ["id", "title"],
                             "additionalProperties": False
                         }
                     }
@@ -106,7 +126,6 @@ def generate_roles_from_subject(subject: str, model: str, request_timeout: int) 
             temperature=ROLE_GENERATION_TEMPERATURE,
             max_tokens=ROLE_GEN_MAX_TOKENS,
             response_format=role_schema,
-            reasoning_effort="low",
         )
         return response.choices[0].message.content
     except openai.error.OpenAIError as e:
@@ -115,6 +134,75 @@ def generate_roles_from_subject(subject: str, model: str, request_timeout: int) 
     except Exception as e:
         print(f"Unexpected error during role generation: {str(e)}")
         raise
+
+
+def generate_role_instructions_preview(
+    subject: str,
+    role_title: str,
+    model: str,
+    request_timeout: int,
+) -> str:
+    """Generate editable sidebar instructions for a selected AI-generated role."""
+    if not COMPETITION_RUNNING:
+        raise Exception("Soutěž již skončila. Generování instrukcí není k dispozici.")
+
+    _validate_prefixed_model(model)
+
+    from .ai_prompts import (
+        ROLE_INSTRUCTION_PREVIEW_SYSTEM_PROMPT,
+        ROLE_INSTRUCTION_PREVIEW_TEMPERATURE,
+        ROLE_INSTRUCTION_PREVIEW_MAX_TOKENS,
+    )
+
+    payload = {
+        "subject": subject or "obecné vzdělávání",
+        "role_title": role_title,
+    }
+
+    response_schema = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "roleplay_instruction_preview_response",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "instructions": {"type": "string"},
+                },
+                "required": ["instructions"],
+                "additionalProperties": False,
+            },
+        },
+    }
+
+    messages = [
+        {"role": "system", "content": ROLE_INSTRUCTION_PREVIEW_SYSTEM_PROMPT},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+    ]
+
+    try:
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=messages,
+            request_timeout=request_timeout,
+            temperature=ROLE_INSTRUCTION_PREVIEW_TEMPERATURE,
+            max_tokens=ROLE_INSTRUCTION_PREVIEW_MAX_TOKENS,
+            response_format=response_schema,
+        )
+
+        raw_content = response.choices[0].message.content
+        parsed = json.loads(raw_content)
+        instructions = str(parsed.get("instructions", "")).strip()
+        if not instructions:
+            raise ValueError("AI nevrátila validní instrukce.")
+        return instructions
+    except openai.error.OpenAIError as e:
+        print(f"OpenAI API error during instruction preview generation: {str(e)}")
+        raise
+    except Exception as e:
+        print(f"Unexpected error during instruction preview generation: {str(e)}")
+        raise
+
 
 def get_chat_history(session_id):
     """
@@ -286,10 +374,13 @@ def prepare_messages_for_ai(chat_history):
     return filtered_messages
 
 def generate_session_id_for_roleplay_chat(role_information):
-    if redis_client:
-        id = uuid.uuid4()
-        while redis_client.exists(f"chat_history:{str(id)}"):
-            id = uuid.uuid4()
-        redis_client.set(f"chat_history:{str(id)}", pickle.dumps(role_information), ex=30)
+    session_id = uuid.uuid4()
 
-    return str(id)
+    if not redis_client:
+        raise RuntimeError("Redis is unavailable. Cannot create roleplay session.")
+
+    while redis_client.exists(f"chat_history:{str(session_id)}"):
+        session_id = uuid.uuid4()
+
+    redis_client.set(f"chat_history:{str(session_id)}", pickle.dumps(role_information), ex=30)
+    return str(session_id)

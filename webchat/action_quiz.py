@@ -165,9 +165,8 @@ class ActionQuiz(Action):
 
         if latest_message.lower() == "/use_gemma":
             dispatcher.utter_message(
-                text="Nyní bude využíván model gemma3 12b. Pokud jej chcete vypnout je nutné resetovat konverzaci."
+                text="Příkaz /use_gemma byl zrušen. Použijte model s prefixem openai/ nebo groq/."
             )
-            await set_slot(sender_id, "use_gemma", "1", self.slot_cache)
             return []
 
         if "/w" in latest_message.lower() and len(latest_message) > 2 and not slots.get("command"):

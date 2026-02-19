@@ -10,6 +10,7 @@ services:
         required: false
     volumes:
       - ./flask:/app
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
     depends_on:
       - mysql
     networks:
@@ -19,6 +20,7 @@ services:
       - "8000:8000"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     command: gunicorn --reload -w 2 -b :8000 app:app
 
   mysql:
@@ -50,6 +52,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./rasa:/app
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
     env_file:
       - path: ./.env.example
         required: true
@@ -60,6 +63,7 @@ services:
       - --enable-api
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     depends_on:
       - redis
       - action_server
@@ -76,6 +80,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./rasa/actions:/app/actions
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
     env_file:
       - path: ./.env.example
         required: true
@@ -83,6 +88,7 @@ services:
         required: false
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     networks:
       - internal
       - web
@@ -103,8 +109,10 @@ services:
         required: false
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     volumes:
       - ./rasa/actions:/app
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
     command: celery -A celery_app.celery worker -l info -c 1 --uid=nobody --gid=nogroup
     depends_on:
       - rabbit
@@ -128,8 +136,10 @@ services:
         required: false
     environment:
       LANGSMITH_PROJECT: ${FASTAPI_LANGSMITH_PROJECT:-fastapi-dev}
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     volumes:
       - ./fastapi:/code
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
     networks:
       - web
       - internal
@@ -148,8 +158,10 @@ services:
     environment:
       LANGSMITH_PROJECT: ${WEBCHAT_LANGSMITH_PROJECT:-webchat-dev}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     volumes:
       - ./webchat:/code
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
     networks:
       - web
       - internal

@@ -8,6 +8,9 @@ services:
       - .env
     volumes:
       - ./flask:/app
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
+    environment:
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     depends_on:
       - mysql
     links:
@@ -52,8 +55,11 @@ services:
       context: ./rasa/
     volumes:
       - ./rasa:/app
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
     env_file:
       - .env
+    environment:
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     command:
       - run
       - --enable-api
@@ -87,8 +93,11 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./rasa/actions:/app/actions
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
     env_file:
       - .env
+    environment:
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     networks:
       - internal
       - web
@@ -122,6 +131,9 @@ services:
       - .env
     volumes:
       - ./rasa/actions:/app
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
+    environment:
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     command: celery -A celery_app.celery worker -l debug -c 4 -Ofair --uid=nobody --gid=nogroup
     depends_on:
       - rabbit
@@ -137,6 +149,9 @@ services:
       - .env
     volumes:
       - ./rasa/actions:/app
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
+    environment:
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     command: celery -A celery_app.celery worker -l debug -c 4 -Ofair --uid=nobody --gid=nogroup
     depends_on:
       - rabbit
@@ -152,6 +167,9 @@ services:
       - .env
     volumes:
       - ./rasa/actions:/app
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
+    environment:
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     command: celery -A celery_app.celery worker -l debug -c 4 -Ofair --uid=nobody --gid=nogroup
     depends_on:
       - rabbit
@@ -172,8 +190,10 @@ services:
       - .env
     environment:
       LANGSMITH_PROJECT: ${FASTAPI_LANGSMITH_PROJECT}
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     volumes:
       - ./fastapi:/code
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
     networks:
       - web
       - internal
@@ -188,8 +208,10 @@ services:
       - .env
     environment:
       LANGSMITH_PROJECT: ${WEBCHAT_LANGSMITH_PROJECT}
+      AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     volumes:
       - ./webchat:/code
+      - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
     networks:
       - web
       - internal

@@ -5,6 +5,7 @@ from typing import Optional
 from contextlib import asynccontextmanager
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
+from ai_config import AIModelConfig
 
 
 logger = logging.getLogger(__name__)
@@ -16,10 +17,11 @@ class GlobalRateLimiter:
         # Models sorted by capacity (highest capacity first)
         # Keys are the *upper bound* of requests for that model tier
         base = 10
+        default_model = AIModelConfig.CHAT_MODEL
         self.models_by_traffic = {
-            base: "gpt-4.1",
-            base * 5: "gpt-4.1-mini", 
-            base * 10: "gpt-4.1-nano", 
+            base: default_model,
+            base * 5: default_model,
+            base * 10: default_model,
         }
         # Sort thresholds for reliable iteration
         self._sorted_thresholds = sorted(self.models_by_traffic.keys())

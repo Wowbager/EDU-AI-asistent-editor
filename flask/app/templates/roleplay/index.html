@@ -113,7 +113,8 @@
     </div>
 </body>
 
-<!-- WebSocket Chat Implementation -->
+<!-- Socket.IO Chat Transport -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='js/websocket-chat.js') }}"></script>
 
 <script>
@@ -202,7 +203,7 @@
         });
     }
 
-    startBtn.addEventListener("click", () => {
+    startBtn.addEventListener("click", async () => {
         // Get selected role data
         const selectedOption = roleSelect.options[roleSelect.selectedIndex];
         if (!selectedOption || !selectedOption.value) {
@@ -211,23 +212,14 @@
         }
 
         const roleTitle = selectedOption.text;
-        const roleBrief = selectedOption.dataset.brief;
         const subject = aiSubjectInput.value.trim();
 
-        // Fill sidebar fields
+        // Keep sidebar synchronized without injecting generated prompt content.
         subjectInput.value = subject;
         customRoleName.value = roleTitle;
-        customRoleBrief.value = ""; // Leave empty as decided
-        customInstructions.value = roleBrief; // Minimal format
-
-        // Update character counter for instructions
-        const instructionsLength = roleBrief.length;
-        customCharCounter.textContent = `${instructionsLength}/1500 znaků`;
-        if (instructionsLength > 1200) {
-            customCharCounter.className = "text-warning mt-1";
-        } else {
-            customCharCounter.className = "text-muted mt-1";
-        }
+        customRoleBrief.value = "";
+        customInstructions.value = "Generuji návrh instrukcí...";
+        customInstructions.dispatchEvent(new Event("input"));
 
         // Close the modal
         if (aiRolesModalEl && aiRolesModalEl.contains(document.activeElement)) {
@@ -235,8 +227,51 @@
         }
         $("#aiRolesModal").modal("hide");
 
-        // Trigger custom chat (will validate and start)
-        startCustomChat();
+        startBtn.disabled = true;
+        customInstructions.readOnly = true;
+
+        try {
+            const response = await fetch(
+                "{{ url_for('roleplay.generate_role_instructions') }}",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        role_title: roleTitle,
+                        subject: subject,
+                    }),
+                },
+            );
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(
+                    errorData.error || `Server error: ${response.status}`,
+                );
+            }
+
+            const data = await response.json();
+            const fallbackInstructions =
+                `Jsi ${roleTitle}. Odpovídej v češtině, drž se tématu '${subject || "obecné vzdělávání"}', ` +
+                "buď stručný, věcný a bezpečný pro školní prostředí.";
+
+            customInstructions.value =
+                (data.instructions && data.instructions.trim()) ||
+                fallbackInstructions;
+        } catch (error) {
+            console.error("Chyba při generování instrukcí role:", error);
+            alert(`Nepodařilo se vygenerovat instrukce: ${error.message}`);
+            customInstructions.value =
+                `Jsi ${roleTitle}. Odpovídej v češtině, drž se tématu '${subject || "obecné vzdělávání"}', ` +
+                "buď stručný, věcný a bezpečný pro školní prostředí.";
+        } finally {
+            customInstructions.readOnly = false;
+            startBtn.disabled = false;
+            customInstructions.dispatchEvent(new Event("input"));
+            customInstructions.focus();
+        }
     });
     sendBtn.addEventListener("click", sendMessage);
     newChatBtn.addEventListener("click", resetToRoleSelection);
@@ -487,7 +522,7 @@
             fetchRolesBtn.textContent = "Načítám...";
 
             const response = await fetch(
-                `https://go.edu-ai.eu/soutez/roles?subject=${encodeURIComponent(
+                `{{ url_for('roleplay.get_roles') }}?subject=${encodeURIComponent(
                     subject,
                 )}`,
             );
@@ -524,7 +559,6 @@
                 const option = document.createElement("option");
                 option.value = role.id;
                 option.textContent = role.title;
-                option.dataset.brief = role.brief;
                 roleSelect.appendChild(option);
             });
 
@@ -616,120 +650,6 @@
 
         chatLog.appendChild(messageContainer);
         messageContainer.scrollIntoView({ behavior: "smooth", block: "end" });
-    }
-
-    async function startChat() {
-        const subjectInput = document.getElementById("subject-input"); // Define locally
-        if (!subjectInput) {
-            console.error(
-                "Element s ID 'subject-input' nebyl nalezen v startChat.",
-            );
-            alert("Chyba: Vstupní pole pro předmět nebylo nalezeno.");
-            return;
-        }
-
-        const selectedOption = roleSelect.options[roleSelect.selectedIndex];
-        if (!selectedOption || !selectedOption.value) {
-            alert("Prosím, vyberte roli.");
-            return;
-        }
-
-        currentRoleId = selectedOption.value;
-        const roleTitle = selectedOption.text;
-        const roleBrief = selectedOption.dataset.brief;
-        const subject = aiSubjectInput.value.trim(); // Use AI subject input from modal
-
-        // Close the modal
-        $("#aiRolesModal").modal("hide");
-
-        roleDisplay.innerHTML = `<strong>Role:</strong> ${roleTitle} | <strong>Předmět:</strong> ${subject}`;
-        chatLog.innerHTML = "";
-        assistantMessageCount = 0;
-        currentSessionId = null;
-
-        // Show chat interface and hide placeholder
-        chatContainer.classList.add("open"); // Add 'open' class for mobile
-        document.getElementById("chat-placeholder").style.display = "none";
-        document.getElementById("chat-body-content").style.display = "flex";
-        document.getElementById("chat-footer-content").style.display = "block";
-        msgInput.style.height = "50px";
-
-        console.log("startChat: Initiating chat setup...");
-
-        // Prepare system prompt and first user message
-        const systemPrompt = `Jsi ${roleTitle}. ${roleBrief}. Jsi profesionál v oblasti '${subject}'.`;
-        const firstUserMessage = `Představ se mi prosím, stručně vysvětli svou specializaci a řekni, jakým stylem budeš komunikovat. Poté vyčkej na mé pokyny.`;
-
-        try {
-            console.log("startChat: Generating session ID...");
-            addSystemMessage("Připravuji chat...");
-
-            // Step 1: Generate session ID from Flask
-            const response = await fetch(
-                "{{ url_for('roleplay.generate_session_id') }}",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        role_id: currentRoleId,
-                        role_title: roleTitle,
-                        role_brief: roleBrief,
-                        subject: subject,
-                        system_prompt: systemPrompt,
-                        general_info: `Odpovídej v češtině, v kontextu předmětu: ${subject}. Maximálně 200 slov.`,
-                    }),
-                },
-            );
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(
-                    errorData.error || `Server error: ${response.status}`,
-                );
-            }
-
-            const data = await response.json();
-            currentSessionId = data.session_id;
-            console.log("startChat: Session ID received:", currentSessionId);
-
-            // Step 2: Connect to WebSocket
-            addSystemMessage("Připojuji k chatovacímu serveru...");
-            await connectWebSocket(currentSessionId);
-
-            // Remove setup messages
-            const systemMessages = chatLog.querySelectorAll(
-                ".alert.alert-warning",
-            );
-            systemMessages.forEach((msg) => msg.remove());
-
-            console.log(
-                "startChat: WebSocket connected, sending first message...",
-            );
-
-            // Step 3: Send first user message via WebSocket
-            addMessage("user", firstUserMessage);
-            const sent = sendWebSocketMessage(firstUserMessage);
-
-            if (!sent) {
-                throw new Error("Nepodařilo se odeslat úvodní zprávu");
-            }
-
-            // Enable inputs (they'll be managed by WebSocket responses)
-            msgInput.disabled = false;
-            sendBtn.disabled = false;
-            msgInput.focus();
-        } catch (error) {
-            console.error("startChat: Error:", error);
-            const systemMessages = chatLog.querySelectorAll(
-                ".alert.alert-warning",
-            );
-            systemMessages.forEach((msg) => msg.remove());
-            addSystemMessage(`Chyba při zahájení chatu: ${error.message}`);
-            msgInput.disabled = false;
-            sendBtn.disabled = false;
-        }
     }
 
     function sendMessage() {

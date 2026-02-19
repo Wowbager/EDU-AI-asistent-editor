@@ -1,119 +1,153 @@
-// WebSocket Chat Implementation for EDU-AI
-// This script replaces the HTTP-based chat with WebSocket connections to FastAPI
+// Socket.IO Chat Transport for EDU-AI
+// Keeps existing global API used by roleplay template:
+// connectWebSocket, sendWebSocketMessage, disconnectWebSocket, isWebSocketConnected
 
-(function() {
-    'use strict';
-    
-    // Configuration
-    const FASTAPI_WS_URL = 'wss://api.edu-ai.eu/ws/roleplay/';  // Production
-    // const FASTAPI_WS_URL = 'ws://localhost:6767/ws/roleplay/';  // Development
-    
-    // WebSocket instance
-    let websocket = null;
-    
-    /**
-     * Connect to WebSocket server
-     * @param {string} sessionId - The session ID to connect with
-     * @returns {Promise} Resolves when connected, rejects on error
-     */
-    window.connectWebSocket = function(sessionId) {
+(function () {
+    "use strict";
+
+    const FASTAPI_SOCKETIO_URL = window.FASTAPI_SOCKETIO_URL ||
+        ((window.location.hostname === "localhost" ||
+            window.location.hostname === "127.0.0.1")
+            ? "http://localhost:6767"
+            : "https://api.edu-ai.eu");
+
+    let socket = null;
+    let streamingContainer = null;
+    let streamingBubble = null;
+
+    function clearStreamingBubble() {
+        if (streamingContainer && streamingContainer.parentNode) {
+            streamingContainer.parentNode.removeChild(streamingContainer);
+        }
+        streamingContainer = null;
+        streamingBubble = null;
+    }
+
+    function ensureStreamingBubble() {
+        if (streamingContainer && streamingBubble) {
+            return;
+        }
+
+        if (!window.chatLog) {
+            return;
+        }
+
+        streamingContainer = document.createElement("div");
+        streamingContainer.className = "d-flex mb-3";
+
+        streamingBubble = document.createElement("div");
+        streamingBubble.className = "bg-light p-2 rounded";
+        streamingBubble.style.maxWidth = "80%";
+        streamingBubble.style.whiteSpace = "pre-wrap";
+        streamingBubble.style.wordBreak = "break-word";
+
+        streamingContainer.appendChild(streamingBubble);
+        window.chatLog.appendChild(streamingContainer);
+    }
+
+    window.connectWebSocket = function (sessionId) {
         return new Promise((resolve, reject) => {
-            const wsUrl = FASTAPI_WS_URL + sessionId;
-            console.log('Connecting to WebSocket:', wsUrl);
-            
-            websocket = new WebSocket(wsUrl);
-            
-            websocket.onopen = () => {
-                console.log('WebSocket connected successfully');
+            if (typeof io === "undefined") {
+                reject(new Error("Socket.IO client library not loaded"));
+                return;
+            }
+
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+
+            socket = io(FASTAPI_SOCKETIO_URL, {
+                path: "/socket.io",
+                transports: ["websocket", "polling"],
+                withCredentials: true,
+                reconnection: false,
+                query: {
+                    session_id: sessionId,
+                },
+            });
+
+            socket.on("connect", () => {
                 resolve();
-            };
-            
-            websocket.onmessage = (event) => {
-                console.log('WebSocket message received:', event.data);
-                
-                try {
-                    const data = JSON.parse(event.data);
-                    handleWebSocketMessage(data);
-                } catch (error) {
-                    console.error('Error parsing WebSocket message:', error);
-                    if (window.addSystemMessage) {
-                        window.addSystemMessage('⚠️ Chyba při zpracování odpovědi serveru');
-                    }
-                }
-            };
-            
-            websocket.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                reject(new Error('Chyba připojení k serveru'));
-            };
-            
-            websocket.onclose = (event) => {
-                console.log('WebSocket closed:', event.code, event.reason);
-                
-                // Remove any processing indicators
+            });
+
+            socket.on("connected", handleSocketMessage);
+            socket.on("processing", handleSocketMessage);
+            socket.on("stream_chunk", handleSocketMessage);
+            socket.on("message", handleSocketMessage);
+            socket.on("limit_reached", handleSocketMessage);
+            socket.on("error", handleSocketMessage);
+
+            socket.on("connect_error", (error) => {
+                console.error("Socket.IO connection error:", error);
+                reject(new Error("Chyba připojení k serveru"));
+            });
+
+            socket.on("disconnect", (reason) => {
                 if (window.clearProcessingMessages) {
                     window.clearProcessingMessages();
-                } else if (window.chatLog) {
-                    const systemMessages = window.chatLog.querySelectorAll('.alert.processing-message');
-                    systemMessages.forEach(msg => msg.remove());
                 }
-                
-                if (event.code !== 1000) {  // 1000 = normal closure
-                    if (window.addSystemMessage) {
-                        window.addSystemMessage(`⚠️ Připojení ukončeno: ${event.reason || 'Neznámý důvod'}`);
-                    }
+                clearStreamingBubble();
+
+                if (reason !== "io client disconnect" && window.addSystemMessage) {
+                    window.addSystemMessage(
+                        `⚠️ Připojení ukončeno: ${reason || "Neznámý důvod"}`,
+                    );
                 }
-                
-                // Disable inputs
-                if (window.sendBtn) window.sendBtn.disabled = true;
-                if (window.msgInput) window.msgInput.disabled = true;
-            };
+
+                if (window.sendBtn) {
+                    window.sendBtn.disabled = true;
+                }
+                if (window.msgInput) {
+                    window.msgInput.disabled = true;
+                }
+            });
         });
     };
-    
-    /**
-     * Handle different types of WebSocket messages
-     * @param {Object} data - Parsed JSON message from server
-     */
-    function handleWebSocketMessage(data) {
+
+    function handleSocketMessage(data) {
         const messageType = data.type;
-        
+
         switch (messageType) {
-            case 'connected':
-                console.log('WebSocket connection confirmed:', data.message);
+            case "connected":
                 break;
-                
-            case 'processing':
-                // Clear any existing processing messages first
+
+            case "processing":
                 if (window.clearProcessingMessages) {
                     window.clearProcessingMessages();
                 }
-                // Show processing indicator
+                clearStreamingBubble();
                 if (window.addSystemMessage) {
-                    window.addSystemMessage(data.message || "Generuji odpověď...", true);
+                    window.addSystemMessage(
+                        data.message || "Generuji odpověď...",
+                        true,
+                    );
                 }
                 break;
-                
-            case 'message':
-                // Remove processing messages
+
+            case "stream_chunk":
                 if (window.clearProcessingMessages) {
                     window.clearProcessingMessages();
-                } else if (window.chatLog) {
-                    // Fallback for backwards compatibility
-                    const systemMessages = window.chatLog.querySelectorAll('.alert.processing-message');
-                    systemMessages.forEach(msg => msg.remove());
                 }
-                
-                // Add assistant's reply
+                ensureStreamingBubble();
+                if (streamingBubble) {
+                    streamingBubble.textContent += data.content || "";
+                    if (window.chatLog) {
+                        window.chatLog.scrollTop = window.chatLog.scrollHeight;
+                    }
+                }
+                break;
+
+            case "message":
+                if (window.clearProcessingMessages) {
+                    window.clearProcessingMessages();
+                }
+                clearStreamingBubble();
+
                 if (window.addMessage) {
-                    window.addMessage('assistant', data.content);
+                    window.addMessage("assistant", data.content);
                 }
-                
-                if (window.assistantMessageCount !== undefined) {
-                    window.assistantMessageCount++;
-                }
-                
-                // Re-enable inputs
+
                 if (window.sendBtn) {
                     window.sendBtn.disabled = false;
                 }
@@ -121,47 +155,39 @@
                     window.msgInput.disabled = false;
                     window.msgInput.focus();
                 }
-                
-                // Scroll to bottom
                 if (window.chatLog) {
                     window.chatLog.scrollTop = window.chatLog.scrollHeight;
                 }
                 break;
-                
-            case 'limit_reached':
-                // Remove processing messages
+
+            case "limit_reached":
                 if (window.clearProcessingMessages) {
                     window.clearProcessingMessages();
-                } else if (window.chatLog) {
-                    const processingMsgs = window.chatLog.querySelectorAll('.alert.processing-message');
-                    processingMsgs.forEach(msg => msg.remove());
                 }
-                
-                // Show limit reached message
+                clearStreamingBubble();
+
                 if (window.addSystemMessage) {
                     window.addSystemMessage("⚠️ " + data.message);
                 }
-                
-                // Keep inputs disabled
-                if (window.sendBtn) window.sendBtn.disabled = true;
-                if (window.msgInput) window.msgInput.disabled = true;
+
+                if (window.sendBtn) {
+                    window.sendBtn.disabled = true;
+                }
+                if (window.msgInput) {
+                    window.msgInput.disabled = true;
+                }
                 break;
-                
-            case 'error':
-                // Remove processing messages
+
+            case "error":
                 if (window.clearProcessingMessages) {
                     window.clearProcessingMessages();
-                } else if (window.chatLog) {
-                    const errorProcMsgs = window.chatLog.querySelectorAll('.alert.processing-message');
-                    errorProcMsgs.forEach(msg => msg.remove());
                 }
-                
-                // Show error
+                clearStreamingBubble();
+
                 if (window.addSystemMessage) {
                     window.addSystemMessage(`⚠️ ${data.message}`);
                 }
-                
-                // Re-enable inputs
+
                 if (window.sendBtn) {
                     window.sendBtn.disabled = false;
                 }
@@ -170,56 +196,45 @@
                     window.msgInput.focus();
                 }
                 break;
-                
+
             default:
-                console.warn('Unknown message type:', messageType, data);
+                console.warn("Unknown socket message type:", messageType, data);
         }
     }
-    
-    /**
-     * Send message via WebSocket
-     * @param {string} message - The message to send
-     * @returns {boolean} Success status
-     */
-    window.sendWebSocketMessage = function(message) {
-        if (!websocket || websocket.readyState !== WebSocket.OPEN) {
-            console.error('WebSocket not connected');
+
+    window.sendWebSocketMessage = function (message) {
+        if (!socket || !socket.connected) {
             if (window.addSystemMessage) {
-                window.addSystemMessage("⚠️ Připojení k serveru bylo ztraceno. Prosím, začněte novou konverzaci.");
+                window.addSystemMessage(
+                    "⚠️ Připojení k serveru bylo ztraceno. Prosím, začněte novou konverzaci.",
+                );
             }
             return false;
         }
-        
+
         try {
-            websocket.send(message);
-            console.log('Message sent via WebSocket:', message);
+            socket.emit("send_message", message);
             return true;
         } catch (error) {
-            console.error('Error sending WebSocket message:', error);
+            console.error("Error sending Socket.IO message:", error);
             if (window.addSystemMessage) {
-                window.addSystemMessage(`⚠️ Chyba při odesílání zprávy: ${error.message}`);
+                window.addSystemMessage(
+                    `⚠️ Chyba při odesílání zprávy: ${error.message}`,
+                );
             }
             return false;
         }
     };
-    
-    /**
-     * Close WebSocket connection
-     */
-    window.disconnectWebSocket = function() {
-        if (websocket && websocket.readyState === WebSocket.OPEN) {
-            websocket.close(1000, 'User initiated disconnect');
-            websocket = null;
-            console.log('WebSocket disconnected');
+
+    window.disconnectWebSocket = function () {
+        if (socket) {
+            socket.disconnect();
+            socket = null;
         }
+        clearStreamingBubble();
     };
-    
-    /**
-     * Check if WebSocket is connected
-     * @returns {boolean}
-     */
-    window.isWebSocketConnected = function() {
-        return websocket && websocket.readyState === WebSocket.OPEN;
+
+    window.isWebSocketConnected = function () {
+        return !!(socket && socket.connected);
     };
-    
 })();

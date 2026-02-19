@@ -1,0 +1,17 @@
+{
+  "chat_model": "openai/gpt-5.1",
+  "role_generation_model": "groq/meta-llama/llama-4-maverick-17b-128e-instruct",
+  "role_name_generation_model": "groq/meta-llama/llama-4-maverick-17b-128e-instruct",
+  "role_prompt_model": "groq/meta-llama/llama-4-maverick-17b-128e-instruct",
+  "role_name_count": 5,
+  "chat_temperature": 0.7,
+  "chat_max_tokens": 500,
+  "role_generation_temperature": 0.8,
+  "role_generation_max_tokens": 2000,
+  "request_timeout": 30,
+  "max_ai_responses": 10,
+  "max_message_length": 1000,
+  "max_first_message_length": 500,
+  "bifrost_api_base": "http://20.0.0.228:8080/v1",
+  "bifrost_api_key": "not-needed"
+}

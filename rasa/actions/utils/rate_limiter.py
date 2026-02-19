@@ -2,11 +2,26 @@ import aioredis
 import logging
 import secrets
 import asyncio # Added for potential sleep/retry logic if needed
+import os
+import json
 from typing import Optional  # <-- Add this import
 from contextlib import asynccontextmanager
 
 
 logger = logging.getLogger(__name__) # Use logging instead of print
+
+
+def _load_shared_ai_config():
+    config_path = os.getenv("AI_CONFIG_PATH", "/opt/edu-ai/ai_config.json")
+    try:
+        with open(config_path, "r", encoding="utf-8") as config_file:
+            data = json.load(config_file)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+_SHARED_AI_CONFIG = _load_shared_ai_config()
 
 class GlobalRateLimiter:
     def __init__(self, redis_url="redis://redis:6379/3"):
@@ -15,10 +30,11 @@ class GlobalRateLimiter:
         # Models sorted by capacity (highest capacity first)
         # Keys are the *upper bound* of requests for that model tier
         base = 10
+        default_model = str(_SHARED_AI_CONFIG.get("chat_model", os.getenv("OPENAI_MODEL", "openai/gpt-5.1")))
         self.models_by_traffic = {
-            base: "gpt-5-mini",
-            base * 5: "gpt-5-mini", 
-            base * 10: "gpt-5-mini", 
+            base: default_model,
+            base * 5: default_model,
+            base * 10: default_model,
         }
         # Sort thresholds for reliable iteration
         self._sorted_thresholds = sorted(self.models_by_traffic.keys())

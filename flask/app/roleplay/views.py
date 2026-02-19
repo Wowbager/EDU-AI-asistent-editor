@@ -9,22 +9,17 @@ from app.models import ChatSession, FlaggedResponse, Team, User, ChatMessage, Te
 from datetime import datetime, timedelta
 import openai
 
-# Configure OpenAI to use Groq API
-openai.api_key = os.environ.get("GROQ_KEY")
-openai.api_base = "https://api.groq.com/openai/v1"
-
 # Import utility functions and config from within roleplay module
 from .chat_utils import (
     get_chat_history,
     save_chat_history,
     get_role_by_id,
     generate_roles_from_subject,
+    generate_role_instructions_preview,
     generate_session_id_for_roleplay_chat
 )
 from .ai_prompts import (
     prepare_session_prompt,
-    ROLE_GENERATION_SYSTEM_PROMPT,
-    GENERAL_INSTRUCTIONS
 )
 from .config import (
     COMPETITION_RUNNING,
@@ -64,7 +59,7 @@ def get_roles():
         subject: The subject for which to generate roleplay personas
     
     Returns:
-        JSON with 5 roleplay personas or an error message
+        JSON with role names (phase 1) or an error message
     """
     if not COMPETITION_RUNNING:
         return jsonify({"error": "Soutěž již skončila. Generování rolí není k dispozici."}), 403
@@ -83,13 +78,11 @@ def get_roles():
             "roles": [
                 {
                     "id": str(uuid.uuid4()),
-                    "title": "Testovací role 1",
-                    "brief": "Toto je testovací role."
+                    "title": "Testovací role 1"
                 },
                 {
                     "id": str(uuid.uuid4()),
-                    "title": "Testovací role 2",
-                    "brief": "Toto je další testovací role."
+                    "title": "Testovací role 2"
                 }
             ]
         }), 200
@@ -119,14 +112,13 @@ def get_roles():
             print(f"JSON parse failed for subject '{subject}': {str(e)}")
             return jsonify({"error": "Odpověď od AI nebyla validní JSON."}), 500
         
-        # Validate role structure (should be guaranteed by strict schema, but double-check)
+        # Validate role structure (phase 1: names only)
         validated_roles = []
         for role in roles_data:
-            if isinstance(role, dict) and 'id' in role and 'title' in role and 'brief' in role:
+            if isinstance(role, dict) and 'id' in role and 'title' in role:
                 validated_roles.append({
                     "id": str(role['id']),
-                    "title": str(role['title']),
-                    "brief": str(role['brief'])
+                    "title": str(role['title'])
                 })
             else:
                 print(f"Malformed role object: {role}")
@@ -144,6 +136,40 @@ def get_roles():
         print(f"Unexpected error during get_roles for subject '{subject}': {str(e)}")
         traceback.print_exc()
         return jsonify({"error": f"Chyba při generování rolí: {str(e)}"}), 500
+
+
+@roleplay.route("/role_instructions", methods=["POST"])
+@login_required
+def generate_role_instructions():
+    """Generate editable sidebar instructions for a selected generated role."""
+    if not COMPETITION_RUNNING:
+        return jsonify({"error": "Soutěž již skončila. Generování instrukcí není k dispozici."}), 403
+
+    data = request.get_json() or {}
+    role_title = str(data.get("role_title", "")).strip()
+    subject = str(data.get("subject", "")).strip()
+
+    if not role_title:
+        return jsonify({"error": "Chybí povinné pole: role_title"}), 400
+
+    try:
+        instructions = generate_role_instructions_preview(
+            subject=subject,
+            role_title=role_title,
+            model=ROLE_GENERATION_MODEL,
+            request_timeout=ROLE_GENERATION_TIMEOUT,
+        )
+    except openai.error.OpenAIError as e:
+        app.logger.error(f"OpenAI API error during instruction generation: {str(e)}")
+        return jsonify({"error": "Nepodařilo se vygenerovat instrukce. Zkuste to prosím znovu."}), 503
+    except Exception as e:
+        app.logger.error(f"Error during instruction generation: {str(e)}")
+        return jsonify({"error": "Nepodařilo se připravit instrukce role."}), 500
+
+    if len(instructions) > MAX_CUSTOM_INSTRUCTIONS_LENGTH:
+        instructions = instructions[:MAX_CUSTOM_INSTRUCTIONS_LENGTH].rstrip()
+
+    return jsonify({"instructions": instructions}), 200
 
 @roleplay.route("/chat/<session_id>", methods=["GET"])
 @login_required
@@ -1224,12 +1250,18 @@ def generate_session_id():
 
     if not role_id:
         return jsonify({"error": "Chybějící povinné pole: role_id"}), 400
+
+    if len(user_custom_instructions) > MAX_CUSTOM_INSTRUCTIONS_LENGTH:
+        return jsonify({"error": f"Vlastní instrukce jsou příliš dlouhé (max {MAX_CUSTOM_INSTRUCTIONS_LENGTH} znaků)."}), 400
     
-    # Generate system prompt using centralized prompt engineering module
-    prompt = prepare_session_prompt(
-        role_title=role_title,
-        custom_instructions=user_custom_instructions
-    )
+    try:
+        prompt = prepare_session_prompt(
+            role_title=role_title,
+            custom_instructions=user_custom_instructions
+        )
+    except Exception as e:
+        app.logger.error(f"Error preparing session prompt: {str(e)}")
+        return jsonify({"error": "Nepodařilo se připravit roli. Zkuste to prosím znovu."}), 500
     
     # Prepare messages in LangChain native format (array of message dicts)
     # Only include system messages - frontend will send the first user message
@@ -1252,7 +1284,11 @@ def generate_session_id():
     }
     
     # Generate session ID and store in Redis
-    session_id = generate_session_id_for_roleplay_chat(role_information)
+    try:
+        session_id = generate_session_id_for_roleplay_chat(role_information)
+    except Exception as e:
+        app.logger.error(f"Error creating roleplay Redis session: {str(e)}")
+        return jsonify({"error": "Chyba při přípravě chat relace. Zkuste to prosím znovu."}), 503
     
     # Create ChatSession in database immediately for flagging support
     try:

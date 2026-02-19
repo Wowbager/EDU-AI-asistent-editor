@@ -1,11 +1,10 @@
-"""LLM client wrapper with OpenAI and optional Ollama fallback."""
+"""LLM client wrapper with unified Bifrost routing."""
 
-import json
 import logging
-import os
 from typing import Any, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
+from ai_config import AIModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -15,19 +14,33 @@ class LLMClient:
     
     def __init__(
         self,
-        model: str = "gpt-4o-mini",
+        model: str = "openai/gpt-5-mini",
         temperature: float = 0.5,
         max_tokens: int = 200,
         timeout: int = 600
     ) -> None:
         """Initialize the client with model defaults."""
+        self._validate_prefixed_model(model)
         self.model = ChatOpenAI(
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
             timeout=timeout,
+            openai_api_key=AIModelConfig.OPENAI_API_KEY,
+            openai_api_base=AIModelConfig.BIFROST_API_BASE,
         )
-        self.ollama_url = os.getenv("OLLAMA_URL", "http://ollama:11434")
+
+    @staticmethod
+    def _validate_prefixed_model(model_name: str) -> None:
+        if not isinstance(model_name, str) or "/" not in model_name:
+            raise ValueError(
+                "Invalid OPENAI_MODEL format. Use 'openai/<model>' or 'groq/<model>'."
+            )
+        provider, _ = model_name.split("/", 1)
+        if provider not in {"openai", "groq"}:
+            raise ValueError(
+                "Invalid OPENAI_MODEL provider prefix. Allowed prefixes: 'openai/' or 'groq/'."
+            )
     
     async def get_response(
         self,
@@ -36,7 +49,10 @@ class LLMClient:
         use_ollama: bool = False,
         stream_callback: Optional[Any] = None
     ) -> str:
-        """Get a response, optionally trying Ollama first."""
+        """Get a response through Bifrost.
+
+        The `use_ollama` parameter is deprecated and ignored.
+        """
         if chat_history is not None:
             messages = chat_history
         elif message is not None:
@@ -45,11 +61,7 @@ class LLMClient:
             return ""
 
         if use_ollama:
-            try:
-                response = await self._stream_ollama(messages, stream_callback)
-                return response
-            except Exception as e:
-                logger.warning("Ollama connection error, falling back to OpenAI: %s", e)
+            logger.warning("use_ollama is deprecated and disabled; using Bifrost model routing instead.")
 
         try:
             response = await self.model.ainvoke(messages)
@@ -57,55 +69,3 @@ class LLMClient:
         except Exception as e:
             logger.error("LLM request failed: %s", e)
             return "Omlouvám se, momentálně nemohu odpovědět."
-    
-    async def _stream_ollama(
-        self,
-        messages: List[Dict[str, str]],
-        callback: Optional[Any] = None
-    ) -> str:
-        """Stream response from Ollama."""
-        import aiohttp
-
-        prompt = self._format_messages_for_ollama(messages)
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.ollama_url}/api/generate",
-                json={
-                    "model": "gemma2:27b",
-                    "prompt": prompt,
-                    "stream": True
-                }
-            ) as response:
-                full_text = ""
-                async for line in response.content:
-                    if line:
-                        try:
-                            chunk = json.loads(line)
-                            text = chunk.get("response", "")
-                            full_text += text
-                            if callback:
-                                callback(text=text)
-                        except json.JSONDecodeError:
-                            pass
-                
-                return full_text
-    
-    def _format_messages_for_ollama(
-        self,
-        messages: List[Dict[str, str]]
-    ) -> str:
-        """Format OpenAI-style messages for Ollama."""
-        prompt_parts = []
-        for msg in messages:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            
-            if role == "system":
-                prompt_parts.append(f"System: {content}")
-            elif role == "user":
-                prompt_parts.append(f"User: {content}")
-            elif role == "assistant":
-                prompt_parts.append(f"Assistant: {content}")
-        
-        return "\n".join(prompt_parts)

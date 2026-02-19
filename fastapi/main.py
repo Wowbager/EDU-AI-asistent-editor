@@ -1,30 +1,28 @@
-import os
-import json
-import pickle
-import traceback
 import logging
-from typing import Dict, List, Any
-from datetime import datetime
+import os
+from urllib.parse import parse_qs
+from typing import Dict, List
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
 import redis.asyncio as redis
-from langchain_openai import ChatOpenAI
-from sqlalchemy import select, delete
-from sqlalchemy.exc import SQLAlchemyError
+import socketio
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from .database import async_session_maker
-from .models import ChatSession, ChatMessage
 from .ai_config import AIModelConfig
+from .roleplay_service import (
+    append_assistant_message,
+    append_user_message,
+    create_chat_model,
+    load_session_from_redis,
+    save_chat_to_database,
+)
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="EDU-AI Chat API")
+fastapi_app = FastAPI(title="EDU-AI Chat API")
 
-# CORS configuration
-app.add_middleware(
+fastapi_app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://go.edu-ai.eu", "http://localhost:8000"],
     allow_credentials=True,
@@ -32,249 +30,199 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Redis client (async)
+sio = socketio.AsyncServer(
+    async_mode="asgi",
+    cors_allowed_origins=["https://go.edu-ai.eu", "http://localhost:8000"],
+)
+
+app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
+
 redis_client = redis.Redis(
-    host=os.getenv('REDIS_HOST', 'redis'),
-    port=int(os.getenv('REDIS_PORT', 6379)),
-    db=int(os.getenv('REDIS_DB', 0)),
-    decode_responses=False  # Important for pickle
+    host=os.getenv("REDIS_HOST", "redis"),
+    port=int(os.getenv("REDIS_PORT", 6379)),
+    db=int(os.getenv("REDIS_DB", 0)),
+    decode_responses=False,
 )
 
-# OpenAI model configuration
-model = ChatOpenAI(
-    model=AIModelConfig.CHAT_MODEL,
-    temperature=AIModelConfig.CHAT_TEMPERATURE,
-    max_tokens=AIModelConfig.CHAT_MAX_TOKENS,
-)
-
-# Configuration from centralized config
+model = create_chat_model()
 MAX_ASSISTANT_RESPONSES = AIModelConfig.MAX_ASSISTANT_RESPONSES
 MAX_MESSAGE_LENGTH = AIModelConfig.MAX_MESSAGE_LENGTH
-MAX_FIRST_MESSAGE_LENGTH = AIModelConfig.MAX_FIRST_MESSAGE_LENGTH
+
+connection_states: Dict[str, Dict] = {}
 
 
-async def save_chat_to_database(
-    session_id: str,
-    user_id: int,
-    role_id: str,
-    messages: List[Dict[str, str]]
-):
-    """Save chat session and messages to database asynchronously"""
-    try:
-        async with async_session_maker() as db_session:
-            async with db_session.begin():
-                # Check if session already exists (Flask creates it on session generation)
-                result = await db_session.execute(
-                    select(ChatSession).where(ChatSession.id == session_id)
-                )
-                existing_session = result.scalar_one_or_none()
-                
-                # Create session only if it doesn't exist (shouldn't happen with new flow)
-                if not existing_session:
-                    chat_session = ChatSession(
-                        id=session_id,
-                        user_id=user_id,
-                        role_id=role_id
-                    )
-                    db_session.add(chat_session)
-                    logger.info(f"Created chat session {session_id} for user {user_id}")
-                
-                # Delete existing messages to avoid duplicates (we save full history each time)
-                delete_stmt = delete(ChatMessage).where(ChatMessage.session_id == session_id)
-                await db_session.execute(delete_stmt)
-                
-                # Save all messages (skip system messages, only save user/assistant)
-                message_index = 0
-                for msg in messages:
-                    if msg['role'] in ['user', 'assistant']:
-                        chat_message = ChatMessage(
-                            session_id=session_id,
-                            role=msg['role'],
-                            content=msg['content'],
-                            message_index=message_index
-                        )
-                        db_session.add(chat_message)
-                        message_index += 1
-                
-                await db_session.commit()
-                logger.info(f"Saved {message_index} messages for session {session_id}")
-                
-    except SQLAlchemyError as e:
-        logger.error(f"Database error saving chat {session_id}: {str(e)}")
-        logger.error(traceback.format_exc())
-        # Don't raise - we don't want to crash the WebSocket
-    except Exception as e:
-        logger.error(f"Unexpected error saving chat {session_id}: {str(e)}")
-        logger.error(traceback.format_exc())
-
-
-@app.get("/")
+@fastapi_app.get("/")
 async def root():
-    """Health check endpoint"""
     return {"status": "ok", "service": "EDU-AI Chat API"}
 
 
-@app.websocket("/ws/roleplay/{session_id}")
-async def roleplay_websocket(websocket: WebSocket, session_id: str):
-    """
-    WebSocket endpoint for roleplay chat.
-    
-    Flow:
-    1. Validate session exists in Redis (30s window from Flask)
-    2. Load initial messages (already in LangChain format from Flask)
-    3. Accept WebSocket connection
-    4. Process messages up to MAX_ASSISTANT_RESPONSES
-    5. Save to database after each assistant response
-    """
-    messages: List[Dict[str, str]] = []
-    user_id: int = None
-    role_id: str = None
-    assistant_message_count = 0
-    
-    try:
-        # 1. Validate session exists in Redis
-        if not await redis_client.exists(f"chat_history:{session_id}"):
-            logger.warning(f"Session {session_id} not found in Redis")
-            await websocket.close(code=1008, reason="Invalid or expired session")
-            return
-        
-        # 2. Load initial chat data
-        chat_data_raw = await redis_client.get(f"chat_history:{session_id}")
-        chat_data = pickle.loads(chat_data_raw)
-        
-        # Delete from Redis (one-time use session)
-        await redis_client.delete(f"chat_history:{session_id}")
-        
-        # Extract user and role information
-        user_id = chat_data.get("user_id")
-        role_id = chat_data.get("role", {}).get("id", "unknown")
-        
-        if not user_id:
-            logger.error(f"Session {session_id} missing user_id")
-            await websocket.close(code=1008, reason="Invalid session data")
-            return
-        
-        # Load messages prepared by Flask (already in LangChain format!)
-        messages = chat_data.get("messages", [])
-        
-        if not messages:
-            logger.error(f"Session {session_id} has no initial messages")
-            await websocket.close(code=1008, reason="Invalid session data")
-            return
-        
-        logger.info(f"Session {session_id} initialized for user {user_id}, role {role_id} with {len(messages)} initial messages")
-        
-        # 3. Accept WebSocket connection
-        await websocket.accept()
-        
-        # Send welcome message
-        await websocket.send_json({
-            "type": "connected",
-            "message": "Připojeno k chatovacímu serveru"
-        })
-        
-        # 4. Chat loop - wait for frontend to trigger first message
-        while True:
-            try:
-                # Check if limit reached before accepting more messages
-                if assistant_message_count >= MAX_ASSISTANT_RESPONSES:
-                    await websocket.send_json({
-                        "type": "limit_reached",
-                        "message": f"Dosažen limit {MAX_ASSISTANT_RESPONSES} odpovědí AI"
-                    })
-                    await websocket.close(code=1000, reason="Message limit reached")
-                    break
-                
-                # Receive user message
-                user_message = await websocket.receive_text()
-                
-                # Validate message length
-                if len(user_message) > MAX_MESSAGE_LENGTH:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": f"Zpráva je příliš dlouhá (max {MAX_MESSAGE_LENGTH} znaků)"
-                    })
-                    continue
-                
-                # Add user message to history
-                messages.append({
-                    "role": "user",
-                    "content": user_message,
-                    "timestamp": datetime.utcnow().isoformat()
-                })
-                
-                logger.info(f"Session {session_id}: Received user message ({len(user_message)} chars)")
-                
-                # Send processing indicator
-                await websocket.send_json({
-                    "type": "processing",
-                    "message": "Generuji odpověď..."
-                })
-                
-                # Call OpenAI API - use messages directly (already in correct format)
-                response = await model.ainvoke(messages)
-                assistant_content = response.content
-                
-                # Add assistant response to history
-                messages.append({
-                    "role": "assistant",
-                    "content": assistant_content,
-                    "timestamp": datetime.utcnow().isoformat()
-                })
-                assistant_message_count += 1
-                
-                logger.info(f"Session {session_id}: Generated assistant response #{assistant_message_count}")
-                
-                # Send response to client
-                await websocket.send_json({
-                    "type": "message",
-                    "content": assistant_content,
-                    "message_count": assistant_message_count,
-                    "max_messages": MAX_ASSISTANT_RESPONSES
-                })
-                
-                # Save to database after each assistant response
-                await save_chat_to_database(session_id, user_id, role_id, messages)
-                
-                # Check if limit reached after response
-                if assistant_message_count >= MAX_ASSISTANT_RESPONSES:
-                    await websocket.send_json({
-                        "type": "limit_reached",
-                        "message": f"Dosažen limit {MAX_ASSISTANT_RESPONSES} odpovědí AI"
-                    })
-                    await websocket.close(code=1000, reason="Message limit reached")
-                    break
-                
-            except WebSocketDisconnect:
-                logger.info(f"Session {session_id}: Client disconnected")
-                break
-            except Exception as e:
-                logger.error(f"Session {session_id}: Error processing message: {str(e)}")
-                logger.error(traceback.format_exc())
-                await websocket.send_json({
-                    "type": "error",
-                    "message": "Nastala chyba při zpracování zprávy. Zkuste to znovu."
-                })
-                # Don't break - allow user to continue
-        
-    except WebSocketDisconnect:
-        logger.info(f"Session {session_id}: WebSocket disconnected during setup")
-    except Exception as e:
-        logger.error(f"Session {session_id}: Fatal error: {str(e)}")
-        logger.error(traceback.format_exc())
-        try:
-            await websocket.send_json({
+def _get_session_id_from_connect(environ: Dict, auth) -> str:
+    if isinstance(auth, dict) and auth.get("session_id"):
+        return str(auth.get("session_id"))
+
+    query_params = parse_qs(environ.get("QUERY_STRING", ""))
+    query_session_id = query_params.get("session_id", [""])[0]
+    return query_session_id
+
+
+async def _emit_stream_chunks(sid: str, content: str, chunk_size: int = 80) -> None:
+    if not content:
+        return
+
+    for start_index in range(0, len(content), chunk_size):
+        chunk = content[start_index : start_index + chunk_size]
+        await sio.emit(
+            "stream_chunk",
+            {"type": "stream_chunk", "content": chunk},
+            to=sid,
+        )
+
+
+@sio.event
+async def connect(sid, environ, auth):
+    session_id = _get_session_id_from_connect(environ, auth)
+    if not session_id:
+        raise ConnectionRefusedError("Missing session_id")
+
+    session = await load_session_from_redis(redis_client, session_id)
+    if not session:
+        logger.warning("Socket.IO session rejected, invalid bootstrap session: %s", session_id)
+        raise ConnectionRefusedError("Invalid or expired session")
+
+    connection_states[sid] = {
+        "session_id": session_id,
+        "user_id": session.user_id,
+        "role_id": session.role_id,
+        "messages": session.messages,
+        "assistant_message_count": 0,
+    }
+
+    await sio.emit(
+        "connected",
+        {"type": "connected", "message": "Připojeno k chatovacímu serveru"},
+        to=sid,
+    )
+    logger.info("Socket.IO client connected sid=%s session_id=%s", sid, session_id)
+
+
+@sio.on("send_message")
+async def send_message(sid, user_message):
+    state = connection_states.get(sid)
+    if not state:
+        await sio.emit(
+            "error",
+            {
                 "type": "error",
-                "message": "Nastala kritická chyba. Prosím začněte novou konverzaci."
-            })
-            await websocket.close(code=1011, reason="Internal error")
-        except:
-            pass
-    finally:
-        # Final save attempt on disconnect (in case last message wasn't saved)
-        if user_id and messages:
-            logger.info(f"Session {session_id}: Final cleanup, ensuring data is saved")
-            await save_chat_to_database(session_id, user_id, role_id, messages)
-        
-        # Close Redis connection if needed
-        # (connection pooling handles this automatically)
+                "message": "Neplatná relace. Prosím začněte novou konverzaci.",
+            },
+            to=sid,
+        )
+        await sio.disconnect(sid)
+        return
+
+    session_id = state["session_id"]
+    messages: List[Dict[str, str]] = state["messages"]
+    user_id = state["user_id"]
+    role_id = state["role_id"]
+    assistant_message_count = state["assistant_message_count"]
+
+    try:
+        if assistant_message_count >= MAX_ASSISTANT_RESPONSES:
+            await sio.emit(
+                "limit_reached",
+                {
+                    "type": "limit_reached",
+                    "message": f"Dosažen limit {MAX_ASSISTANT_RESPONSES} odpovědí AI",
+                },
+                to=sid,
+            )
+            await sio.disconnect(sid)
+            return
+
+        if not isinstance(user_message, str):
+            await sio.emit(
+                "error",
+                {
+                    "type": "error",
+                    "message": "Neplatný formát zprávy.",
+                },
+                to=sid,
+            )
+            return
+
+        if len(user_message) > MAX_MESSAGE_LENGTH:
+            await sio.emit(
+                "error",
+                {
+                    "type": "error",
+                    "message": f"Zpráva je příliš dlouhá (max {MAX_MESSAGE_LENGTH} znaků)",
+                },
+                to=sid,
+            )
+            return
+
+        append_user_message(messages, user_message)
+        await sio.emit(
+            "processing",
+            {"type": "processing", "message": "Generuji odpověď..."},
+            to=sid,
+        )
+
+        response = await model.ainvoke(messages)
+        assistant_content = response.content
+
+        await _emit_stream_chunks(sid, assistant_content)
+
+        append_assistant_message(messages, assistant_content)
+        assistant_message_count += 1
+        state["assistant_message_count"] = assistant_message_count
+
+        await sio.emit(
+            "message",
+            {
+                "type": "message",
+                "content": assistant_content,
+                "message_count": assistant_message_count,
+                "max_messages": MAX_ASSISTANT_RESPONSES,
+            },
+            to=sid,
+        )
+
+        await save_chat_to_database(session_id, user_id, role_id, messages)
+
+        if assistant_message_count >= MAX_ASSISTANT_RESPONSES:
+            await sio.emit(
+                "limit_reached",
+                {
+                    "type": "limit_reached",
+                    "message": f"Dosažen limit {MAX_ASSISTANT_RESPONSES} odpovědí AI",
+                },
+                to=sid,
+            )
+            await sio.disconnect(sid)
+
+    except Exception as exc:
+        logger.error("Session %s: Error processing message: %s", session_id, exc)
+        await sio.emit(
+            "error",
+            {
+                "type": "error",
+                "message": "Nastala chyba při zpracování zprávy. Zkuste to znovu.",
+            },
+            to=sid,
+        )
+
+
+@sio.event
+async def disconnect(sid):
+    state = connection_states.pop(sid, None)
+    if not state:
+        return
+
+    await save_chat_to_database(
+        state["session_id"],
+        state["user_id"],
+        state["role_id"],
+        state["messages"],
+    )
+    logger.info("Socket.IO client disconnected sid=%s session_id=%s", sid, state["session_id"])

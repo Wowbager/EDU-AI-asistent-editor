@@ -36,12 +36,3 @@ async_session_maker = async_sessionmaker(
 )
 
 Base = declarative_base()
-
-
-async def get_db():
-    """Dependency for getting database session"""
-    async with async_session_maker() as session:
-        try:
-            yield session
-        finally:
-            await session.close()

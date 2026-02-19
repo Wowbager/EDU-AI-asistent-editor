@@ -1,10 +1,6 @@
 fastapi[standard]>=0.113.0,<0.114.0
-pydantic>=2.7.0,<3.0.0
+python-socketio>=5.11.0
 langchain-openai
-langgraph
-langsmith>=0.1.0
 redis[hiredis]
 SQLAlchemy>=2.0.0
 aiomysql
-websockets
-python-dotenv

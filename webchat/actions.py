@@ -320,7 +320,6 @@ class ActionQuiz(Action):
         command = slots.get("command", "")
         _delayed_answers = slots.get("delayed_answers", "")
         gpt_conversation = slots.get("gpt_conversation", "")
-        use_gemma = slots.get("use_gemma", "0")
 
         delayed_answers = (
             json.loads(_delayed_answers) if _delayed_answers not in [None, ""] else []
@@ -356,10 +355,9 @@ class ActionQuiz(Action):
         
         if latest_message.lower() == "/use_gemma":
             dispatcher.utter_message(
-                text="Nyní bude využíván model gemma3 12b. Pokud jej chcete vypnout je nutné resetovat konverzaci."
+                text="Příkaz /use_gemma byl zrušen. Použijte model s prefixem openai/ nebo groq/."
             )
-            await set_slot(sender_id, "use_gemma", "1")
-            return [FollowupAction("action_listen")]      
+            return [FollowupAction("action_listen")]
 
         # asking mff
         if "/w" in latest_message.lower() and len(latest_message) > 2 and command == "":
@@ -406,7 +404,7 @@ class ActionQuiz(Action):
         if gpt_conversation in ["1", "edu", "max"] and latest_message != "/get_started":
             if latest_message.lower().strip() == "/model":
                 dispatcher.utter_message(
-                    text=f"Používám model: gpt-4o-mini (nebo gemma3 pokud je zapnutý)"
+                    text=f"Používám model: {os.getenv('OPENAI_MODEL', 'openai/gpt-5-mini')}"
                 )
                 return [FollowupAction("action_listen")]
             
@@ -463,10 +461,7 @@ class ActionQuiz(Action):
             # Filter out any messages with None or empty content
             prompt = [msg for msg in prompt if msg.get("content") not in [None, ""]]
 
-            if use_gemma == "1":
-                response = await get_llm_response(message=None, chat=prompt, use_gemma=True, utter_message_sender=dispatcher.utter_message)
-            else:
-                response = await get_llm_response(chat=prompt)
+            response = await get_llm_response(chat=prompt)
 
             # Replace multiple newlines with a single newline
             # response = re.sub(r"\n\s*\n", " \n ", response)
@@ -914,10 +909,7 @@ class ActionQuiz(Action):
                         ])
                         message = prompt + "průběh konverzace:\n" + chat
 
-                        if use_gemma == "1":
-                            response = await get_llm_response(message=None, chat=prompt, use_gemma=True, utter_message_sender=dispatcher.utter_message)
-                        else:
-                            response = await get_llm_response(message)
+                        response = await get_llm_response(message)
                         logger.debug("AI response timer: %.4f seconds", time.time() - timer)
                         logger.debug("AI response: %s", response[:100] if response else None)
 

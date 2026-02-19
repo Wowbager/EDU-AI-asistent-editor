@@ -1,5 +1,5 @@
-"""Minimal SQLAlchemy models for FastAPI - mirrors Flask models"""
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey
+"""SQLAlchemy models used by the FastAPI roleplay websocket runtime."""
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from .database import Base
 
@@ -27,16 +27,3 @@ class ChatMessage(Base):
     message_index = Column(Integer, nullable=False)
 
 
-class FlaggedResponse(Base):
-    """Flagged response model - mirrors Flask's FlaggedResponse (for reference only)"""
-    __tablename__ = "flagged_responses"
-    
-    id = Column(String(36), primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
-    session_id = Column(String(36), ForeignKey("chat_sessions.id"), nullable=False)
-    content = Column(Text)
-    message_index = Column(Integer, nullable=True)
-    summary = Column(Text, nullable=True)
-    timestamp = Column(DateTime, server_default=func.now())
-    is_public = Column(Boolean, default=False)
