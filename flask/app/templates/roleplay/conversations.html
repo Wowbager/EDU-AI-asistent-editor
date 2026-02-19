@@ -160,6 +160,15 @@
         // Store all sessions data for searching and display
         const sessionsData = {{ sessions_data|tojson|safe }};
         let currentSessionId = null;
+
+        function buildContinueChatUrl(sessionData) {
+            const params = new URLSearchParams({
+                continue_session_id: sessionData.session.id,
+                role_title: sessionData.session.role_title || 'Konverzace',
+                role_brief: sessionData.session.role_brief || '',
+            });
+            return `{{ url_for('roleplay.roleplay_home') }}?${params.toString()}`;
+        }
         
         // Click handler for conversation items
         $(document).on('click', '.conversation-item', function() {
@@ -193,6 +202,11 @@
                             <h5>${(sessionData.session.role_title || 'Konverzace').replace('Role ', '')}</h5>
                             <p class="text-muted small mb-0">${sessionData.session.role_brief || ''}</p>
                         </div>
+                    </div>
+                    <div class="chat-header-action">
+                        <a class="btn btn-outline-primary" href="${buildContinueChatUrl(sessionData)}">
+                            Pokračovat v chatu
+                        </a>
                     </div>
                 </div>
             `;

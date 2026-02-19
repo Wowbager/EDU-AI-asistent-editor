@@ -117,6 +117,11 @@
 
 <script>
     // Global variables
+    const FASTAPI_SOCKETIO_URL = window.FASTAPI_SOCKETIO_URL ||
+        ((window.location.hostname === "localhost" ||
+            window.location.hostname === "127.0.0.1")
+            ? "http://localhost:6767"
+            : "https://api.edu-ai.eu");
     let currentSessionId = null;
     let currentRoleId = null;
     let assistantMessageCount = 0;
@@ -294,7 +299,7 @@
     });
 
     // Function to start custom chat
-    async function startCustomChat() {
+    async function startCustomChat(options = {}) {
         const roleName = customRoleName.value.trim();
         const roleBrief = customRoleBrief.value.trim();
         const subject = subjectInput.value.trim();
@@ -321,9 +326,7 @@
         startCustomChatBtnSidebar.disabled = true;
 
         try {
-            // Generate a unique ID for the custom role
-            const customRoleId = "custom-" + Date.now();
-            currentRoleId = customRoleId;
+            currentRoleId = "custom-" + Date.now();
 
             // Display role information in chat header
             roleDisplay.innerHTML = `<strong>Role:</strong> ${roleName} | <strong>Předmět:</strong> ${subject}`;
@@ -344,7 +347,7 @@
             $("#customChatModal").modal("hide");
 
             console.log("startCustomChat: Initiating WebSocket chat setup...");
-            addSystemMessage("Připravuji chat...");
+            addSystemMessage("Připravuji chat...", false, "setup-message");
 
             // Step 1: Generate session ID from Flask (same as regular roles)
             const response = await fetch(
@@ -379,12 +382,16 @@
             );
 
             // Step 2: Connect to WebSocket
-            addSystemMessage("Připojuji k chatovacímu serveru...");
+            addSystemMessage(
+                "Připojuji k chatovacímu serveru...",
+                false,
+                "setup-message",
+            );
             await connectWebSocket(currentSessionId);
 
             // Remove setup messages
             const systemMessages = chatLog.querySelectorAll(
-                ".alert.alert-warning",
+                ".alert.setup-message, .reconnect-notice, .disconnect-notice",
             );
             systemMessages.forEach((msg) => msg.remove());
 
@@ -402,15 +409,14 @@
 
             // Enable inputs (they'll be managed by WebSocket responses)
             msgInput.disabled = false;
+            sendBtn.disabled = false;
         } catch (error) {
             // Ensure system messages are removed on error
             const systemMessages = chatLog.querySelectorAll(
-                ".alert.alert-warning",
+                ".alert.setup-message",
             );
             systemMessages.forEach((msg) => msg.remove());
-            addSystemMessage(
-                `Chyba při zahájení vlastního chatu: ${error.message}`,
-            );
+            addSystemMessage(`Chyba při zahájení vlastního chatu: ${error.message}`);
             console.error("Error in startCustomChat:", error);
 
             // Re-enable buttons and inputs on error
@@ -419,6 +425,137 @@
         } finally {
             // Re-enable start button
             startCustomChatBtnSidebar.disabled = false;
+        }
+    }
+
+    async function buildResumeSession(conversationId) {
+        const response = await fetch(`${FASTAPI_SOCKETIO_URL}/sessions/resume`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ conversation_id: conversationId }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(
+                payload.detail || payload.error || `Server error: ${response.status}`,
+            );
+        }
+
+        return payload;
+    }
+
+    function rebuildChatFromHistory(conversationHistory) {
+        chatLog.innerHTML = "";
+        assistantMessageCount = 0;
+
+        if (!Array.isArray(conversationHistory)) {
+            return;
+        }
+
+        conversationHistory.forEach((message) => {
+            if (!message || typeof message.content !== "string") {
+                return;
+            }
+
+            if (message.role === "assistant") {
+                const currentIndex = assistantMessageCount;
+                appendSingleMessagePart(
+                    "assistant",
+                    message.content,
+                    true,
+                    currentIndex,
+                );
+                assistantMessageCount++;
+                return;
+            }
+
+            if (message.role === "user") {
+                appendSingleMessagePart("user", message.content, false, null);
+            }
+        });
+
+        if (chatLog) {
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+    }
+
+    async function resumeConversationById(conversationId, options = {}) {
+        const shouldRebuildFrontend = options.rebuildFrontend !== false;
+
+        if (!conversationId) {
+            throw new Error("Chybí ID konverzace.");
+        }
+
+        addSystemMessage("Obnovuji připojení...", false, "setup-message");
+
+        const payload = await buildResumeSession(conversationId);
+
+        if (shouldRebuildFrontend) {
+            rebuildChatFromHistory(payload.conversation_history);
+        }
+
+        currentSessionId = payload.conversation_id;
+        currentRoleId = payload.role_id || currentRoleId;
+
+        await connectWebSocket(payload.session_id);
+
+        const systemMessages = chatLog.querySelectorAll(
+            ".alert.setup-message, .reconnect-notice, .disconnect-notice",
+        );
+        systemMessages.forEach((msg) => msg.remove());
+
+        if (window.sendBtn) {
+            window.sendBtn.disabled = false;
+        }
+        if (window.msgInput) {
+            window.msgInput.disabled = false;
+            window.msgInput.focus();
+        }
+    }
+
+    async function continueConversationFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const continueSessionId = urlParams.get("continue_session_id");
+
+        if (!continueSessionId) {
+            return;
+        }
+
+        const roleTitle = urlParams.get("role_title") || "Pokračování konverzace";
+        const roleBrief = urlParams.get("role_brief") || "";
+
+        customRoleName.value = roleTitle;
+        customRoleBrief.value = roleBrief;
+        if (!customInstructions.value.trim()) {
+            customInstructions.value = "Pokračování konverzace.";
+            customInstructions.dispatchEvent(new Event("input"));
+        }
+
+        roleDisplay.innerHTML = `<strong>Role:</strong> ${roleTitle}`;
+        chatContainer.classList.add("open");
+        chatPlaceholder.style.display = "none";
+        chatBodyContent.style.display = "flex";
+        chatFooterContent.style.display = "block";
+
+        try {
+            await resumeConversationById(continueSessionId, {
+                rebuildFrontend: true,
+            });
+        } catch (error) {
+            const systemMessages = chatLog.querySelectorAll(
+                ".alert.setup-message",
+            );
+            systemMessages.forEach((msg) => msg.remove());
+            addSystemMessage(`Nepodařilo se obnovit konverzaci: ${error.message}`);
+            if (window.sendBtn) {
+                window.sendBtn.disabled = true;
+            }
+            if (window.msgInput) {
+                window.msgInput.disabled = true;
+            }
         }
     }
 
@@ -729,11 +866,55 @@
     function addSystemMessage(content, isProcessing = false) {
         const messageDiv = document.createElement("div");
         messageDiv.className = "alert alert-warning";
+        const extraClass = arguments.length > 2 ? arguments[2] : "";
         if (isProcessing) {
             messageDiv.classList.add("processing-message");
         }
+        if (extraClass) {
+            messageDiv.classList.add(extraClass);
+        }
         messageDiv.textContent = content;
         chatLog.appendChild(messageDiv);
+        chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function addReconnectOption() {
+        const existingReconnectNotice = chatLog.querySelector(".reconnect-notice");
+        if (existingReconnectNotice) {
+            existingReconnectNotice.remove();
+        }
+
+        const reconnectContainer = document.createElement("div");
+        reconnectContainer.className = "alert alert-warning d-flex align-items-center justify-content-between reconnect-notice";
+
+        const reconnectText = document.createElement("span");
+        reconnectText.textContent =
+            "Pokračovat v konverzaci můžete tlačítkem níže.";
+
+        const reconnectBtn = document.createElement("button");
+        reconnectBtn.type = "button";
+        reconnectBtn.className = "btn btn-sm btn-outline-primary ms-2";
+        reconnectBtn.textContent = "Znovu připojit";
+        reconnectBtn.addEventListener("click", async () => {
+            reconnectBtn.disabled = true;
+            reconnectBtn.textContent = "Připojuji...";
+
+            try {
+                await resumeConversationById(currentSessionId, {
+                    rebuildFrontend: false,
+                });
+            } catch (error) {
+                addSystemMessage(
+                    `Nepodařilo se obnovit chat: ${error.message}`,
+                );
+                reconnectBtn.disabled = false;
+                reconnectBtn.textContent = "Znovu připojit";
+            }
+        });
+
+        reconnectContainer.appendChild(reconnectText);
+        reconnectContainer.appendChild(reconnectBtn);
+        chatLog.appendChild(reconnectContainer);
         chatLog.scrollTop = chatLog.scrollHeight;
     }
 
@@ -748,9 +929,24 @@
     window.chatLog = chatLog;
     window.addMessage = addMessage;
     window.addSystemMessage = addSystemMessage;
+    window.onSocketDisconnected = () => {
+        const existingDisconnectNotice = chatLog.querySelector(
+            ".disconnect-notice",
+        );
+        if (!existingDisconnectNotice) {
+            addSystemMessage(
+                "⚠️ Byli jste odpojeni od chatu.",
+                false,
+                "disconnect-notice",
+            );
+        }
+        addReconnectOption();
+    };
     window.clearProcessingMessages = clearProcessingMessages;
     window.sendBtn = sendBtn;
     window.msgInput = msgInput;
+
+    continueConversationFromUrl();
 
     // Event listener for flag summary character counter
     if (flagSummaryInput) {

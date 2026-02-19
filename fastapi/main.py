@@ -5,8 +5,9 @@ from typing import Dict, List
 
 import redis.asyncio as redis
 import socketio
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from .ai_config import AIModelConfig
 from .roleplay_service import (
@@ -14,6 +15,7 @@ from .roleplay_service import (
     append_user_message,
     create_chat_model,
     load_session_from_redis,
+    rebuild_session_bootstrap,
     save_chat_to_database,
 )
 
@@ -51,9 +53,42 @@ MAX_MESSAGE_LENGTH = AIModelConfig.MAX_MESSAGE_LENGTH
 connection_states: Dict[str, Dict] = {}
 
 
+class ResumeConversationRequest(BaseModel):
+    conversation_id: str
+
+
 @fastapi_app.get("/")
 async def root():
     return {"status": "ok", "service": "EDU-AI Chat API"}
+
+
+@fastapi_app.post("/sessions/resume")
+async def resume_conversation(payload: ResumeConversationRequest):
+    try:
+        rebuilt = await rebuild_session_bootstrap(
+            redis_client=redis_client,
+            conversation_id=payload.conversation_id,
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to rebuild session bootstrap for conversation %s: %s",
+            payload.conversation_id,
+            exc,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Nepodařilo se připravit pokračování konverzace.",
+        )
+
+    if not rebuilt:
+        raise HTTPException(status_code=404, detail="Konverzace nebyla nalezena.")
+
+    return {
+        "session_id": rebuilt["conversation_id"],
+        "conversation_id": rebuilt["conversation_id"],
+        "role_id": rebuilt["role_id"],
+        "conversation_history": rebuilt["conversation_history"],
+    }
 
 
 def _get_session_id_from_connect(environ: Dict, auth) -> str:

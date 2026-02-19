@@ -73,6 +73,61 @@ async def load_session_from_redis(redis_client, session_id: str) -> Optional[Ses
     return SessionBootstrap(user_id=user_id, role_id=role_id, messages=messages)
 
 
+async def rebuild_session_bootstrap(redis_client, conversation_id: str) -> Optional[Dict]:
+    """Rebuild one-time Redis bootstrap for an existing conversation ID."""
+
+    async with async_session_maker() as db_session:
+        chat_session_result = await db_session.execute(
+            select(ChatSession).where(ChatSession.id == conversation_id)
+        )
+        chat_session = chat_session_result.scalar_one_or_none()
+
+        if not chat_session:
+            return None
+
+        messages_result = await db_session.execute(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == conversation_id)
+            .order_by(ChatMessage.message_index)
+        )
+        db_messages = messages_result.scalars().all()
+
+    conversation_history: List[Dict[str, str]] = []
+    for message in db_messages:
+        if message.role in {"user", "assistant", "system"}:
+            conversation_history.append(
+                {
+                    "role": message.role,
+                    "content": message.content,
+                }
+            )
+
+    role_id = chat_session.role_id or "unknown"
+    bootstrap_payload = {
+        "user_id": chat_session.user_id,
+        "role": {
+            "id": role_id,
+        },
+        "messages": conversation_history,
+    }
+
+    await redis_client.set(
+        f"chat_history:{conversation_id}",
+        pickle.dumps(bootstrap_payload),
+        ex=600,
+    )
+
+    frontend_history = [
+        message for message in conversation_history if message.get("role") in {"user", "assistant"}
+    ]
+
+    return {
+        "conversation_id": conversation_id,
+        "role_id": role_id,
+        "conversation_history": frontend_history,
+    }
+
+
 async def save_chat_to_database(
     session_id: str,
     user_id: int,

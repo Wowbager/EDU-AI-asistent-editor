@@ -11,6 +11,8 @@
             ? "http://localhost:6767"
             : "https://api.edu-ai.eu");
 
+    window.FASTAPI_SOCKETIO_URL = FASTAPI_SOCKETIO_URL;
+
     let socket = null;
     let streamingContainer = null;
     let streamingBubble = null;
@@ -89,10 +91,12 @@
                 }
                 clearStreamingBubble();
 
-                if (reason !== "io client disconnect" && window.addSystemMessage) {
-                    window.addSystemMessage(
-                        `⚠️ Připojení ukončeno: ${reason || "Neznámý důvod"}`,
-                    );
+                if (reason !== "io client disconnect") {
+                    if (typeof window.onSocketDisconnected === "function") {
+                        window.onSocketDisconnected();
+                    } else if (window.addSystemMessage) {
+                        window.addSystemMessage("⚠️ Připojení bylo přerušeno.");
+                    }
                 }
 
                 if (window.sendBtn) {
