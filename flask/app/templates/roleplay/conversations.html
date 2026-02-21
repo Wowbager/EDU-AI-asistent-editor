@@ -3,6 +3,7 @@
 {% block title %}Moje konverzace - EDU AI Chat{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/unified-chat.css') }}">
 <body>
     <div class="layout">
         <div class="content">
@@ -68,22 +69,10 @@
                 </div>
             </div>
             
-            <div class="chat">
-                <div class="chat-body">
-                    <div class="no-message-container">
-                        <div class="row my-5">
-                            <div class="col-md-4 offset-4">
-                                <img src="/static/media/svg/undraw_empty_xct9.svg" class="img-fluid" alt="image">
-                            </div>
-                        </div>
-                        <div class="row my-5">
-                            <div class="col-md-4 offset-md-4">
-                                <p class="lead">Vyberte konverzaci z bočního menu</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            {# ── Unified Chat Widget ─────────────────────────── #}
+            {% set uc_id = "conversations-chat" %}
+            {% set uc_placeholder = "Vyberte konverzaci z bočního menu" %}
+            {% include "roleplay/_chat_widget.html" %}
         </div>
     </div>
     
@@ -145,9 +134,6 @@
                         <i class="fas fa-flag me-2"></i> Uložit
                     </button>
                 </div>
-                        <i class="fas fa-flag me-2"></i> Označit zprávu
-                    </button>
-                </div>
             </div>
         </div>
     </div>
@@ -155,391 +141,206 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/unified-chat.js') }}"></script>
 <script>
     $(document).ready(function () {
-        // Store all sessions data for searching and display
+
+        // ── Session data from the server ─────────────────────
         const sessionsData = {{ sessions_data|tojson|safe }};
         let currentSessionId = null;
 
-        function buildContinueChatUrl(sessionData) {
-            const params = new URLSearchParams({
-                continue_session_id: sessionData.session.id,
-                role_title: sessionData.session.role_title || 'Konverzace',
-                role_brief: sessionData.session.role_brief || '',
-            });
-            return `{{ url_for('roleplay.roleplay_home') }}?${params.toString()}`;
-        }
-        
-        // Click handler for conversation items
-        $(document).on('click', '.conversation-item', function() {
+        // ── Initialise the unified chat component ────────────
+        const chat = new UnifiedChat({
+            container: '#conversations-chat',
+            readOnly: false,
+            wsUrl: 'wss://api.edu-ai.eu/ws/roleplay/',
+            maxMessageLength: 500,
+
+            // Flag button callback → open the flag modal
+            onFlag: function (sessionId, content, _messageIndex) {
+                if (!content) {
+                    alert('Nelze označit prázdnou zprávu.');
+                    return;
+                }
+                $('#flagMode').val('create');
+                $('#flagMessageModalLabel').text('Označit zprávu');
+                $('#confirmFlagBtn').html('<i class="fas fa-flag me-2"></i> Označit');
+                $('#deleteFlagBtn').hide();
+                $('#flagSessionId').val(sessionId);
+                $('#flagContent').val(content);
+                $('#flagSummary').val('');
+                $('#flagTeamId').val('');
+                $('#flagIsPublic').prop('checked', false);
+                $('#flagId').val('');
+                $('#flagMessageModal').modal('show');
+            },
+
+            // Unflag / edit button callback → open modal prefilled
+            onUnflag: function (sessionId, content, flagInfo) {
+                if (!flagInfo) {
+                    alert('Informace o označení nebyly nalezeny.');
+                    return;
+                }
+                $('#flagMode').val('edit');
+                $('#flagMessageModalLabel').text('Upravit označení');
+                $('#confirmFlagBtn').html('<i class="fas fa-save me-2"></i> Uložit změny');
+                $('#deleteFlagBtn').show();
+                $('#flagSessionId').val(sessionId);
+                $('#flagContent').val(content);
+                $('#flagSummary').val(flagInfo.summary || '');
+                $('#flagTeamId').val(flagInfo.team_id || '');
+                $('#flagId').val(flagInfo.id);
+                $('#flagIsPublic').prop('checked', flagInfo.is_public || false);
+                $('#flagMessageModal').modal('show');
+            }
+        });
+
+        // ── Conversation list click ──────────────────────────
+        $(document).on('click', '.conversation-item', function () {
             const sessionId = $(this).data('session-id');
             currentSessionId = sessionId;
+            chat.sessionId = sessionId;
+
             const sessionData = sessionsData.find(s => s.session.id === sessionId);
-            
             if (!sessionData) return;
-            
-            // Mark as active
+
+            // Highlight active item
             $('.conversation-item').removeClass('open-chat');
             $(this).addClass('open-chat');
-            
-            // Show chat and hide no-message
-            $('.chat').addClass('open');
-            $('.no-message-container').hide();
-            
-            // Build chat header
-            const chatHeader = `
-                <div class="chat-header">
-                    <div class="chat-header-user">
-                        <a class="btn btn-outline-light" href="javascript:void(0);" id="back2conversations">
-                            <i class="fas fa-arrow-left"></i>
-                        </a>
-                        <figure class="avatar">
-                            <span class="avatar-title rounded-circle" style="background-color: #0a80ff">
-                                <i class="fas fa-user"></i>
-                            </span>
-                        </figure>
-                        <div>
-                            <h5>${(sessionData.session.role_title || 'Konverzace').replace('Role ', '')}</h5>
-                            <p class="text-muted small mb-0">${sessionData.session.role_brief || ''}</p>
-                        </div>
-                    </div>
-                    <div class="chat-header-action">
-                        <a class="btn btn-outline-primary" href="${buildContinueChatUrl(sessionData)}">
-                            Pokračovat v chatu
-                        </a>
-                    </div>
-                </div>
-            `;
-            
-            // Build messages
-            let messagesHtml = '';
-            if (sessionData.chat_history && sessionData.chat_history.length > 0) {
-                sessionData.chat_history.forEach(message => {
-                    if (message.role === 'system') return; // Skip system messages
-                    
-                    const isFlagged = sessionData.flagged_content_set.includes(message.content);
-                    const isUser = message.role === 'user';
-                    
-                    // Find flag info if this message is flagged
-                    let flagInfo = null;
-                    if (isFlagged && sessionData.flagged_messages) {
-                        flagInfo = sessionData.flagged_messages.find(f => f.content === message.content);
-                    }
-                    
-                    messagesHtml += `
-                        <div class="message-item ${isUser ? 'outgoing-message' : ''}">
-                            <div class="message-avatar">
-                                <figure class="avatar">
-                                    <span class="avatar-title rounded-circle" style="background-color: ${isUser ? '#0a80ff' : '#17a2b8'}">
-                                        ${isUser ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>'}
-                                    </span>
-                                </figure>
-                                <div>
-                                    <h5>${isUser ? 'Vy' : 'AI Asistent'}</h5>
-                                    ${message.timestamp ? `<div class="time">${formatTimestamp(message.timestamp)}</div>` : ''}
-                                </div>
-                            </div>
-                            <div class="message-content">
-                                <p style="white-space: pre-wrap; word-break: break-word; margin-bottom: 0;">${escapeHtml(message.content)}</p>
-                                ${sessionData.is_public && flagInfo && flagInfo.summary ? `
-                                    <div class="alert alert-warning mt-2 mb-0" style="padding: 0.5rem 0.75rem;">
-                                        <small><strong><i class="fas fa-flag me-2"></i>Důvod označení:</strong> ${escapeHtml(flagInfo.summary)}</small>
-                                    </div>
-                                ` : ''}
-                                ${!isUser && !sessionData.is_public ? `
-                                    <div class="message-actions mt-2">
-                                        ${isFlagged ? `
-                                            <button class="btn btn-sm btn-warning unflag-btn" 
-                                                    data-session-id="${sessionId}"
-                                                    data-content="${escapeHtml(message.content)}"
-                                                    title="Odznačit tuto zprávu">
-                                                <i class="fas fa-flag me-2"></i> Označeno
-                                            </button>
-                                        ` : `
-                                            <button class="btn btn-sm btn-outline-secondary flag-btn" 
-                                                    data-session-id="${sessionId}"
-                                                    data-content="${escapeHtml(message.content)}"
-                                                    title="Označit tuto zprávu">
-                                                <i class="far fa-flag me-2"></i> Označit
-                                            </button>
-                                        `}
-                                    </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                    `;
-                });
-            } else {
-                messagesHtml = '<p class="text-center text-muted my-5">Žádné zprávy v této konverzaci.</p>';
-            }
-            
-            // Update chat area
-            $('.chat').html(`
-                ${chatHeader}
-                <div class="chat-body">
-                    <div class="messages">
-                        ${messagesHtml}
+
+            // Build header
+            const title = (sessionData.session.role_title || 'Konverzace').replace('Role ', '');
+            const brief = sessionData.session.role_brief || '';
+            chat.setHeader(`
+                <div class="chat-header-user">
+                    <a class="btn btn-outline-light" href="javascript:void(0);" id="back2conversations">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                    <figure class="avatar">
+                        <span class="avatar-title rounded-circle" style="background-color: #0a80ff">
+                            <i class="fas fa-user"></i>
+                        </span>
+                    </figure>
+                    <div>
+                        <h5>${title}</h5>
+                        <p class="text-muted small mb-0">${brief}</p>
                     </div>
                 </div>
             `);
-            
-            // Scroll to bottom
-            setTimeout(() => {
-                $('.chat-body').scrollTop($('.chat-body')[0].scrollHeight);
-            }, 100);
+
+            // Load history via unified component
+            chat.loadHistory(sessionData.chat_history, {
+                flaggedContentSet: sessionData.flagged_content_set || [],
+                flaggedMessages:   sessionData.flagged_messages   || [],
+                isPublic:          sessionData.is_public          || false,
+            });
+
+            chat.show();
         });
-        
-        // Back button handler
-        $(document).on('click', '#back2conversations', function() {
-            $('.chat').removeClass('open');
+
+        // ── Back button ──────────────────────────────────────
+        $(document).on('click', '#back2conversations', function () {
+            chat.disconnect();
+            chat.hide();
+            chat.clear();
             $('.conversation-item').removeClass('open-chat');
-            // Remove navigation-open class on mobile
+            currentSessionId = null;
             if ($(window).width() < 1200) {
                 $('body').removeClass('navigation-open');
             }
         });
-        
-        // Mobile navigation button - matches admin behavior
-        // This is handled by the global handler in app.js which adds 'navigation-open' class to body
-        
-        // Search functionality
+
+        // ── Search ───────────────────────────────────────────
         let searchTimeout;
-        $('#search').on('input', function() {
+        $('#search').on('input', function () {
             clearTimeout(searchTimeout);
-            const searchTerm = $(this).val().toLowerCase();
-            
+            const term = $(this).val().toLowerCase();
             searchTimeout = setTimeout(() => {
-                if (searchTerm === '') {
+                if (term === '') {
                     $('.conversation-item').show();
                 } else {
-                    $('.conversation-item').each(function() {
+                    $('.conversation-item').each(function () {
                         const title = $(this).find('h5').text().toLowerCase();
                         const brief = $(this).find('p').text().toLowerCase();
-                        
-                        if (title.includes(searchTerm) || brief.includes(searchTerm)) {
-                            $(this).show();
-                        } else {
-                            $(this).hide();
-                        }
+                        $(this).toggle(title.includes(term) || brief.includes(term));
                     });
                 }
             }, 300);
         });
-        
-        // Flag message handler - show modal
-        $(document).on('click', '.flag-btn', function() {
-            const sessionId = $(this).data('session-id');
-            const content = $(this).data('content');
-            
-            if (!content) {
-                alert('Nelze označit prázdnou zprávu.');
-                return;
-            }
-            
-            // Set mode to create
-            $('#flagMode').val('create');
-            $('#flagMessageModalLabel').text('Označit zprávu');
-            $('#confirmFlagBtn').html('<i class="fas fa-flag me-2"></i> Označit');
-            $('#deleteFlagBtn').hide();
-            
-            // Store data in modal
-            $('#flagSessionId').val(sessionId);
-            $('#flagContent').val(content);
-            $('#flagSummary').val('');
-            $('#flagTeamId').val('');
-            $('#flagIsPublic').prop('checked', false);
-            $('#flagId').val('');
-            
-            // Show modal
-            $('#flagMessageModal').modal('show');
-        });
-        
-        // Unflag/Edit message handler - show modal with existing data
-        $(document).on('click', '.unflag-btn', function() {
-            const sessionId = $(this).data('session-id');
-            const content = $(this).data('content');
-            
-            // Find the flag info from sessionsData
-            const sessionData = sessionsData.find(s => s.session.id === sessionId);
-            if (!sessionData) return;
-            
-            const flagInfo = sessionData.flagged_messages.find(f => f.content === content);
-            if (!flagInfo) {
-                alert('Informace o označení nebyly nalezeny.');
-                return;
-            }
-            
-            // Set mode to edit
-            $('#flagMode').val('edit');
-            $('#flagMessageModalLabel').text('Upravit označení');
-            $('#confirmFlagBtn').html('<i class="fas fa-save me-2"></i> Uložit změny');
-            $('#deleteFlagBtn').show();
-            
-            // Store data in modal
-            $('#flagSessionId').val(sessionId);
-            $('#flagContent').val(content);
-            $('#flagSummary').val(flagInfo.summary || '');
-            $('#flagTeamId').val(flagInfo.team_id || '');
-            $('#flagId').val(flagInfo.id);
-            
-            // Set is_public checkbox
-            $('#flagIsPublic').prop('checked', flagInfo.is_public || false);
-            
-            // Show modal
-            $('#flagMessageModal').modal('show');
-        });
-        
-        // Confirm flag button in modal
-        $('#confirmFlagBtn').on('click', function() {
-            const mode = $('#flagMode').val();
+
+        // ── Flag modal: Confirm button ───────────────────────
+        $('#confirmFlagBtn').on('click', function () {
+            const mode    = $('#flagMode').val();
             const sessionId = $('#flagSessionId').val();
             const content = $('#flagContent').val();
             const summary = $('#flagSummary').val().trim();
-            const teamId = $('#flagTeamId').val() || null;
+            const teamId  = $('#flagTeamId').val() || null;
             const isPublic = $('#flagIsPublic').is(':checked');
-            const flagId = $('#flagId').val();
-            
+            const flagId  = $('#flagId').val();
+
             if (!summary) {
                 alert('Prosím, zadejte popis problému.');
                 return;
             }
-            
+
             if (mode === 'edit' && flagId) {
-                // Update existing flag
                 fetch('{{ url_for("roleplay.update_flagged_summary", flagged_id="PLACEHOLDER") }}'.replace('PLACEHOLDER', flagId), {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        summary: summary,
-                        team_id: teamId,
-                        is_public: isPublic
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ summary, team_id: teamId, is_public: isPublic })
                 })
-                .then(response => response.json())
+                .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        $('#flagMessageModal').modal('hide');
-                        // Refresh the current conversation
-                        reloadCurrentSession();
-                    } else {
-                        alert('Chyba při aktualizaci označení: ' + (data.error || 'Neznámá chyba'));
-                    }
+                    if (data.success) { $('#flagMessageModal').modal('hide'); reloadCurrentSession(); }
+                    else { alert('Chyba při aktualizaci označení: ' + (data.error || 'Neznámá chyba')); }
                 })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Chyba při aktualizaci označení.');
-                });
+                .catch(() => alert('Chyba při aktualizaci označení.'));
             } else {
-                // Create new flag
                 fetch('{{ url_for("roleplay.flag_response") }}', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        flagged_content: content,
-                        summary: summary,
-                        team_id: teamId,
-                        is_public: isPublic
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, flagged_content: content, summary, team_id: teamId, is_public: isPublic })
                 })
-                .then(response => response.json())
+                .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        $('#flagMessageModal').modal('hide');
-                        // Refresh the current conversation
-                        reloadCurrentSession();
-                    } else {
-                        alert('Chyba při označování zprávy: ' + (data.error || 'Neznámá chyba'));
-                    }
+                    if (data.success) { $('#flagMessageModal').modal('hide'); reloadCurrentSession(); }
+                    else { alert('Chyba při označování zprávy: ' + (data.error || 'Neznámá chyba')); }
                 })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Chyba při označování zprávy.');
-                });
+                .catch(() => alert('Chyba při označování zprávy.'));
             }
         });
-        
-        // Delete flag button handler
-        $('#deleteFlagBtn').on('click', function() {
-            const sessionId = $('#flagSessionId').val();
-            const content = $('#flagContent').val();
-            
-            if (!confirm('Opravdu chcete odstranit toto označení?')) {
-                return;
-            }
-            
+
+        // ── Flag modal: Delete button ────────────────────────
+        $('#deleteFlagBtn').on('click', function () {
+            if (!confirm('Opravdu chcete odstranit toto označení?')) return;
+
             fetch('{{ url_for("roleplay.unflag_message") }}', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    session_id: sessionId,
-                    content: content
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: $('#flagSessionId').val(), content: $('#flagContent').val() })
             })
-            .then(response => response.json())
+            .then(r => r.json())
             .then(data => {
-                if (data.success) {
-                    $('#flagMessageModal').modal('hide');
-                    // Refresh the current conversation
-                    reloadCurrentSession();
-                } else {
-                    alert('Chyba při odstraňování označení: ' + (data.error || 'Neznámá chyba'));
-                }
+                if (data.success) { $('#flagMessageModal').modal('hide'); reloadCurrentSession(); }
+                else { alert('Chyba při odstraňování označení: ' + (data.error || 'Neznámá chyba')); }
             })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Chyba při odstraňování označení.');
-            });
+            .catch(() => alert('Chyba při odstraňování označení.'));
         });
-        
-        // Function to reload current session without full page reload
+
+        // ── Helpers ──────────────────────────────────────────
         function reloadCurrentSession() {
-            if (!currentSessionId) {
-                location.reload();
-                return;
-            }
-            
-            // Store current session ID to restore after reload
+            if (!currentSessionId) { location.reload(); return; }
             sessionStorage.setItem('selectedSessionId', currentSessionId);
             location.reload();
         }
-        
-        // Restore selected session after page load
-        $(document).ready(function() {
-            const selectedSessionId = sessionStorage.getItem('selectedSessionId');
-            if (selectedSessionId) {
-                sessionStorage.removeItem('selectedSessionId');
-                // Wait a bit for the page to fully load
-                setTimeout(() => {
-                    $(`.conversation-item[data-session-id="${selectedSessionId}"]`).trigger('click');
-                }, 100);
-            }
-        });
-        
-        // Helper functions
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return String(text).replace(/[&<>"']/g, m => map[m]);
-        }
-        
-        function formatTimestamp(timestamp) {
-            if (typeof timestamp === 'string') {
-                const date = new Date(timestamp);
-                return date.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
-            }
-            return '';
+
+        // Restore selected session after page reload
+        const selectedSessionId = sessionStorage.getItem('selectedSessionId');
+        if (selectedSessionId) {
+            sessionStorage.removeItem('selectedSessionId');
+            setTimeout(() => {
+                $(`.conversation-item[data-session-id="${selectedSessionId}"]`).trigger('click');
+            }, 100);
         }
     });
 </script>

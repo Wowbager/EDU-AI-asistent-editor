@@ -1,0 +1,56 @@
+/* ===================================================================
+   unified-chat.css — Supplementary styles for the UnifiedChat component.
+   The bulk of layout and message styling comes from app.css
+   (.message-item, .outgoing-message, .message-avatar, .message-content).
+   This file only adds what is missing.
+   =================================================================== */
+
+/* ── Input group (textarea + buttons row) ─────────────────────────── */
+.uc-input-group {
+    display: flex;
+    align-items: center;
+}
+
+.uc-input-group .uc-msg-input {
+    resize: none;
+    min-height: 50px;
+    max-height: 200px;
+    flex: 1;
+}
+
+.uc-input-group .form-buttons {
+    display: flex;
+    margin-left: 0.75rem;
+    gap: 0.5rem;
+}
+
+/* ── System / processing messages inside the chat stream ──────────── */
+.uc-messages .uc-system-message {
+    max-width: 100%;
+    margin: 10px 0;
+}
+
+/* ── Message action buttons (flag / unflag) ───────────────────────── */
+.message-item .message-actions {
+    margin-top: 0.5rem;
+}
+
+.message-item .message-actions .btn {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.6rem;
+}
+
+/* ── Processing indicator bar ─────────────────────────────────────── */
+.uc-processing-indicator {
+    padding: 5px 0;
+}
+
+/* ── Ensure the message body scrolls ──────────────────────────────── */
+.uc-body {
+    overflow-y: auto;
+}
+
+/* ── Flag info banner inside a message ────────────────────────────── */
+.message-item .message-content > .alert.alert-warning {
+    font-size: 0.85rem;
+}
