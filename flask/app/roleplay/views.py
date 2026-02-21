@@ -361,7 +361,7 @@ def conversations():
         
         if chat_history and len(chat_history) > 0:
             # Check if first message is system message with role info
-            first_msg = chat_history[0]
+            first_msg = chat_history[0] if len(chat_history) > 0 else {"role": "", "content": ""}
             if first_msg.get('role') == 'system':
                 content = first_msg.get('content', '')
                 # Try to extract role title from system message
