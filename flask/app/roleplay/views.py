@@ -267,7 +267,6 @@ def conversations():
             role_title = "Konverzace"
             role_brief = ""
 
-            print(chat_history)
             if chat_history and len(chat_history) > 0:
                 first_msg = chat_history[0] if len(chat_history) > 1 else {"role": "", "content": ""}
                 if first_msg.get('role') == 'system':

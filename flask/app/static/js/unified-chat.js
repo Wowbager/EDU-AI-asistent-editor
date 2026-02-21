@@ -217,7 +217,7 @@ class UnifiedChat {
     show() {
         this.container.classList.add('open');
         if (this.chatPlaceholder) this.chatPlaceholder.style.display = 'none';
-        if (this.chatBody) this.chatBody.style.display = 'flex';
+        if (this.chatBody) this.chatBody.style.display = 'block';
         if (this.chatFooter && !this.readOnly) this.chatFooter.style.display = 'block';
     }
 
