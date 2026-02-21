@@ -1,18 +1,22 @@
 /**
  * UnifiedChat - Reusable chat component for EDU AI
  *
- * Provides:
- * - Consistent message rendering (user/assistant) using .message-item pattern
- * - Text input with character counter and validation
- * - WebSocket connection for live send/receive
- * - Loading message history from pre-loaded data
- * - Flag/unflag message button callbacks
- * - System and processing indicator messages
+ * Uses Socket.IO to communicate with the FastAPI roleplay chat server.
+ *
+ * Server protocol (fastapi/main.py):
+ *   connect   → pass session_id via query param
+ *   emit "send_message" <string>   → send a user message
+ *   listen "connected"             → server confirmed session
+ *   listen "processing"            → server is generating a response
+ *   listen "stream_chunk"          → incremental token streaming
+ *   listen "message"               → complete assistant response
+ *   listen "limit_reached"         → message limit exceeded
+ *   listen "error"                 → server-side error
  *
  * Usage:
  *   const chat = new UnifiedChat({
  *       container: '#my-chat',
- *       wsUrl: 'wss://api.edu-ai.eu/ws/roleplay/',
+ *       socketUrl: 'https://api.edu-ai.eu',
  *       maxMessageLength: 500,
  *       onFlag: (sessionId, content, messageIndex) => { ... },
  *       onUnflag: (sessionId, content, flagInfo) => { ... },
@@ -23,7 +27,7 @@
  *   chat.setHeader('<div>...</div>');
  *   chat.loadHistory(messages, { flaggedContentSet, flaggedMessages, isPublic });
  *
- *   // Or connect via WebSocket for live chat
+ *   // Or connect via Socket.IO for live chat
  *   await chat.connect(sessionId);
  *   chat.sendMessage('Hello!');
  */
@@ -32,23 +36,30 @@ class UnifiedChat {
      * @param {Object} options
      * @param {string} options.container - CSS selector for the chat container element
      * @param {number} [options.maxMessageLength=500] - Maximum characters per message
-     * @param {string} [options.wsUrl] - WebSocket base URL (session ID is appended)
+     * @param {string} [options.socketUrl] - Socket.IO server URL
      * @param {boolean} [options.readOnly=false] - If true, hides input area
      * @param {Function} [options.onFlag] - Called when flag button clicked: (sessionId, content, messageIndex)
      * @param {Function} [options.onUnflag] - Called when unflag button clicked: (sessionId, content, flagInfo)
      * @param {Function} [options.onMessageSent] - Called after a message is sent: (message)
      * @param {Function} [options.onMessageReceived] - Called when assistant message arrives: (content)
-     * @param {Function} [options.onConnected] - Called when WebSocket connects
-     * @param {Function} [options.onDisconnected] - Called when WebSocket disconnects: (event)
-     * @param {Function} [options.onError] - Called on WebSocket error
+     * @param {Function} [options.onConnected] - Called when Socket.IO connects
+     * @param {Function} [options.onDisconnected] - Called when Socket.IO disconnects: (reason)
+     * @param {Function} [options.onError] - Called on error
      * @param {Function} [options.onLimitReached] - Called when message limit is reached
      */
     constructor(options = {}) {
         // Configuration
         this.containerSelector = options.container || '#unified-chat';
         this.maxMessageLength = options.maxMessageLength || 500;
-        this.wsBaseUrl = options.wsUrl || 'wss://api.edu-ai.eu/ws/roleplay/';
         this.readOnly = options.readOnly || false;
+
+        // Socket.IO URL — resolve once
+        const defaultUrl = (window.location.hostname === 'localhost' ||
+                            window.location.hostname === '127.0.0.1')
+            ? 'http://localhost:6767'
+            : 'https://api.edu-ai.eu';
+        this.socketUrl = options.socketUrl || window.FASTAPI_SOCKETIO_URL || defaultUrl;
+        window.FASTAPI_SOCKETIO_URL = this.socketUrl;
 
         // Callbacks
         this.onFlag = options.onFlag || null;
@@ -62,9 +73,13 @@ class UnifiedChat {
 
         // State
         this.sessionId = null;
-        this.websocket = null;
+        this.socket = null;                 // Socket.IO client instance
         this.assistantMessageCount = 0;
         this._inputBound = false;
+
+        // Streaming state
+        this._streamingContainer = null;
+        this._streamingBubble = null;
 
         // DOM references
         this.container = null;
@@ -110,8 +125,7 @@ class UnifiedChat {
             this.chatFooter.style.display = 'none';
         }
 
-        // Expose backward-compatible globals so existing page scripts and
-        // websocket-chat.js can interoperate during migration.
+        // Expose backward-compatible globals
         this._exposeGlobals();
     }
 
@@ -172,7 +186,6 @@ class UnifiedChat {
     }
 
     _exposeGlobals() {
-        // Store instance globally for backward compat
         window._unifiedChat = this;
 
         window.chatLog = this.chatMessages;
@@ -182,9 +195,9 @@ class UnifiedChat {
         window.sendBtn = this.sendBtn;
         window.msgInput = this.msgInput;
 
-        // Backward-compatible WebSocket globals
+        // Backward-compatible connection globals
         window.connectWebSocket = (sessionId) => this.connect(sessionId);
-        window.sendWebSocketMessage = (message) => this._wsSend(message);
+        window.sendWebSocketMessage = (message) => this._socketSend(message);
         window.disconnectWebSocket = () => this.disconnect();
         window.isWebSocketConnected = () => this.isConnected();
     }
@@ -193,19 +206,14 @@ class UnifiedChat {
     // Public API — UI
     // ===================================================================
 
-    /**
-     * Set the chat header inner HTML.
-     * @param {string} html
-     */
+    /** Set the chat header inner HTML. */
     setHeader(html) {
         if (this.chatHeader) {
             this.chatHeader.innerHTML = html;
         }
     }
 
-    /**
-     * Show the chat area (hide placeholder, show body + footer).
-     */
+    /** Show the chat area (hide placeholder, show body + footer). */
     show() {
         this.container.classList.add('open');
         if (this.chatPlaceholder) this.chatPlaceholder.style.display = 'none';
@@ -213,9 +221,7 @@ class UnifiedChat {
         if (this.chatFooter && !this.readOnly) this.chatFooter.style.display = 'block';
     }
 
-    /**
-     * Hide the chat area (show placeholder, hide body + footer).
-     */
+    /** Hide the chat area (show placeholder, hide body + footer). */
     hide() {
         this.container.classList.remove('open');
         if (this.chatPlaceholder) this.chatPlaceholder.style.display = 'flex';
@@ -224,19 +230,16 @@ class UnifiedChat {
         if (this.chatHeader) this.chatHeader.innerHTML = '';
     }
 
-    /**
-     * Remove all messages from the chat body.
-     */
+    /** Remove all messages from the chat body. */
     clear() {
         if (this.chatMessages) {
             this.chatMessages.innerHTML = '';
         }
         this.assistantMessageCount = 0;
+        this._clearStreamingBubble();
     }
 
-    /**
-     * Scroll chat body to bottom.
-     */
+    /** Scroll chat body to bottom. */
     scrollToBottom() {
         if (this.chatBody) {
             setTimeout(() => {
@@ -245,18 +248,13 @@ class UnifiedChat {
         }
     }
 
-    /**
-     * Enable or disable the input controls.
-     * @param {boolean} enabled
-     */
+    /** Enable or disable the input controls. */
     setInputEnabled(enabled) {
         if (this.sendBtn) this.sendBtn.disabled = !enabled;
         if (this.msgInput) this.msgInput.disabled = !enabled;
     }
 
-    /**
-     * Switch from read-only to live input mode (e.g. to continue a past conversation).
-     */
+    /** Switch from read-only to live input mode. */
     enableLiveMode() {
         this.readOnly = false;
         if (this.chatFooter) this.chatFooter.style.display = 'block';
@@ -273,13 +271,13 @@ class UnifiedChat {
      * @param {string} role - 'user' | 'assistant' | 'system'
      * @param {string} content - Plain-text message content
      * @param {Object} [options]
-     * @param {string}  [options.timestamp]       - ISO timestamp string
-     * @param {boolean} [options.isFlagged=false]  - Whether the message is flagged
-     * @param {Object}  [options.flagInfo=null]    - { id, content, summary, ... }
-     * @param {string}  [options.sessionId]        - Override current session ID
-     * @param {boolean} [options.isPublic=false]   - Public flag view (hides flag buttons, shows reasons)
-     * @param {boolean} [options.showFlagButton=true] - Show flag/unflag button on assistant messages
-     * @returns {HTMLElement|null} The created message element
+     * @param {string}  [options.timestamp]
+     * @param {boolean} [options.isFlagged=false]
+     * @param {Object}  [options.flagInfo=null]
+     * @param {string}  [options.sessionId]
+     * @param {boolean} [options.isPublic=false]
+     * @param {boolean} [options.showFlagButton=true]
+     * @returns {HTMLElement|null}
      */
     addMessage(role, content, options = {}) {
         if (role === 'system') return null;
@@ -339,7 +337,7 @@ class UnifiedChat {
         p.style.whiteSpace = 'pre-wrap';
         p.style.wordBreak = 'break-word';
         p.style.marginBottom = '0';
-        p.textContent = content; // textContent auto-escapes HTML
+        p.textContent = content;
         contentDiv.appendChild(p);
 
         // Public flag reason badge
@@ -392,9 +390,8 @@ class UnifiedChat {
 
     /**
      * Add a system/warning message banner.
-     *
-     * @param {string} content - Text to display
-     * @param {boolean} [isProcessing=false] - If true, marked as removable processing msg
+     * @param {string} content
+     * @param {boolean} [isProcessing=false]
      * @returns {HTMLElement}
      */
     addSystemMessage(content, isProcessing = false) {
@@ -409,9 +406,7 @@ class UnifiedChat {
         return div;
     }
 
-    /**
-     * Remove all processing indicator messages.
-     */
+    /** Remove all processing indicator messages. */
     clearProcessingMessages() {
         if (!this.chatMessages) return;
         this.chatMessages.querySelectorAll('.processing-message').forEach(el => el.remove());
@@ -422,9 +417,6 @@ class UnifiedChat {
      *
      * @param {Array} messages - Array of { role, content, timestamp }
      * @param {Object} [flaggedInfo]
-     * @param {string[]} [flaggedInfo.flaggedContentSet] - Array of flagged content strings
-     * @param {Object[]} [flaggedInfo.flaggedMessages]   - Array of { id, content, summary, ... }
-     * @param {boolean}  [flaggedInfo.isPublic=false]
      */
     loadHistory(messages, flaggedInfo = {}) {
         this.clear();
@@ -470,9 +462,8 @@ class UnifiedChat {
 
     /**
      * Send a message. If `text` is omitted the current input value is used.
-     *
-     * @param {string} [text] - Optional explicit message text
-     * @returns {boolean} Whether the message was sent successfully
+     * @param {string} [text]
+     * @returns {boolean}
      */
     sendMessage(text) {
         const message = text || (this.msgInput ? this.msgInput.value.trim() : '');
@@ -488,10 +479,7 @@ class UnifiedChat {
             return false;
         }
 
-        // Disable inputs while sending
         this.setInputEnabled(false);
-
-        // Render user bubble
         this.addMessage('user', message);
 
         // Clear input (only if we read from the textarea)
@@ -501,8 +489,7 @@ class UnifiedChat {
             this._updateCharCounter();
         }
 
-        // Transmit via WebSocket
-        const sent = this._wsSend(message);
+        const sent = this._socketSend(message);
         if (!sent) {
             this.setInputEnabled(true);
             return false;
@@ -513,91 +500,120 @@ class UnifiedChat {
     }
 
     // ===================================================================
-    // WebSocket
+    // Socket.IO connection
     // ===================================================================
 
     /**
-     * Open a WebSocket connection to the chat server.
+     * Open a Socket.IO connection to the chat server.
      *
      * @param {string} sessionId
      * @returns {Promise<void>} Resolves when the connection is established
      */
     connect(sessionId) {
         return new Promise((resolve, reject) => {
+            if (typeof io === 'undefined') {
+                reject(new Error('Socket.IO client library not loaded'));
+                return;
+            }
+
+            // Disconnect any previous connection
+            if (this.socket) {
+                this.socket.disconnect();
+                this.socket = null;
+            }
+
             this.sessionId = sessionId;
-            const wsUrl = this.wsBaseUrl + sessionId;
-            console.log('UnifiedChat: Connecting to', wsUrl);
+            console.log('UnifiedChat: Connecting to', this.socketUrl, 'session:', sessionId);
 
-            this.websocket = new WebSocket(wsUrl);
+            this.socket = io(this.socketUrl, {
+                path: '/socket.io',
+                transports: ['websocket', 'polling'],
+                withCredentials: true,
+                reconnection: false,
+                query: {
+                    session_id: sessionId,
+                },
+            });
 
-            this.websocket.onopen = () => {
-                console.log('UnifiedChat: WebSocket connected');
+            this.socket.on('connect', () => {
+                console.log('UnifiedChat: Socket.IO connected');
                 if (this.onConnected) this.onConnected();
                 resolve();
-            };
+            });
 
-            this.websocket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    this._handleWSMessage(data);
-                } catch (err) {
-                    console.error('UnifiedChat: parse error', err);
-                    this.addSystemMessage('⚠️ Chyba při zpracování odpovědi serveru');
-                }
-            };
+            // Server events — each has { type, ... } payload
+            this.socket.on('connected', (data) => this._handleServerEvent(data));
+            this.socket.on('processing', (data) => this._handleServerEvent(data));
+            this.socket.on('stream_chunk', (data) => this._handleServerEvent(data));
+            this.socket.on('message', (data) => this._handleServerEvent(data));
+            this.socket.on('limit_reached', (data) => this._handleServerEvent(data));
+            this.socket.on('error', (data) => this._handleServerEvent(data));
 
-            this.websocket.onerror = (error) => {
-                console.error('UnifiedChat: WebSocket error', error);
+            this.socket.on('connect_error', (error) => {
+                console.error('UnifiedChat: Socket.IO connection error:', error);
                 if (this.onError) this.onError(error);
                 reject(new Error('Chyba připojení k serveru'));
-            };
+            });
 
-            this.websocket.onclose = (event) => {
-                console.log('UnifiedChat: closed', event.code, event.reason);
+            this.socket.on('disconnect', (reason) => {
+                console.log('UnifiedChat: Socket.IO disconnected, reason:', reason);
                 this.clearProcessingMessages();
+                this._clearStreamingBubble();
 
-                if (event.code !== 1000) {
-                    this.addSystemMessage(`⚠️ Připojení ukončeno: ${event.reason || 'Neznámý důvod'}`);
+                if (reason !== 'io client disconnect') {
+                    if (this.onDisconnected) this.onDisconnected(reason);
                 }
 
                 this.setInputEnabled(false);
-                if (this.onDisconnected) this.onDisconnected(event);
-            };
+            });
         });
     }
 
-    /**
-     * Close the WebSocket connection gracefully.
-     */
+    /** Close the Socket.IO connection gracefully. */
     disconnect() {
-        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-            this.websocket.close(1000, 'User initiated disconnect');
+        if (this.socket) {
+            this.socket.disconnect();
+            this.socket = null;
         }
-        this.websocket = null;
+        this._clearStreamingBubble();
     }
 
-    /**
-     * Check whether the WebSocket is currently open.
-     * @returns {boolean}
-     */
+    /** Check whether Socket.IO is currently connected. */
     isConnected() {
-        return this.websocket && this.websocket.readyState === WebSocket.OPEN;
+        return !!(this.socket && this.socket.connected);
     }
+
+    // ===================================================================
+    // Socket.IO event handling (private)
+    // ===================================================================
 
     /** @private */
-    _handleWSMessage(data) {
-        switch (data.type) {
+    _handleServerEvent(data) {
+        const messageType = data && data.type;
+
+        switch (messageType) {
             case 'connected':
-                console.log('UnifiedChat: server confirmed connection');
+                console.log('UnifiedChat: server confirmed session');
                 break;
 
             case 'processing':
                 this.clearProcessingMessages();
+                this._clearStreamingBubble();
                 this.addSystemMessage(data.message || 'Generuji odpověď...', true);
+                break;
+
+            case 'stream_chunk':
+                this.clearProcessingMessages();
+                this._ensureStreamingBubble();
+                if (this._streamingBubble) {
+                    this._streamingBubble.textContent += data.content || '';
+                    this.scrollToBottom();
+                }
                 break;
 
             case 'message':
                 this.clearProcessingMessages();
+                this._clearStreamingBubble();
                 this.addMessage('assistant', data.content);
                 this.setInputEnabled(true);
                 if (this.msgInput) this.msgInput.focus();
@@ -606,6 +622,7 @@ class UnifiedChat {
 
             case 'limit_reached':
                 this.clearProcessingMessages();
+                this._clearStreamingBubble();
                 this.addSystemMessage('⚠️ ' + data.message);
                 this.setInputEnabled(false);
                 if (this.onLimitReached) this.onLimitReached(data);
@@ -613,6 +630,7 @@ class UnifiedChat {
 
             case 'error':
                 this.clearProcessingMessages();
+                this._clearStreamingBubble();
                 this.addSystemMessage(`⚠️ ${data.message}`);
                 this.setInputEnabled(true);
                 if (this.msgInput) this.msgInput.focus();
@@ -620,25 +638,83 @@ class UnifiedChat {
                 break;
 
             default:
-                console.warn('UnifiedChat: unknown message type', data.type, data);
+                console.warn('UnifiedChat: unknown server event type:', messageType, data);
         }
     }
 
-    /** @private - low level WebSocket send */
-    _wsSend(message) {
+    /** @private - Send a message via Socket.IO */
+    _socketSend(message) {
         if (!this.isConnected()) {
             console.error('UnifiedChat: not connected');
             this.addSystemMessage('⚠️ Připojení k serveru bylo ztraceno.');
             return false;
         }
         try {
-            this.websocket.send(message);
+            this.socket.emit('send_message', message);
             return true;
         } catch (err) {
             console.error('UnifiedChat: send error', err);
             this.addSystemMessage(`⚠️ Chyba při odesílání zprávy: ${err.message}`);
             return false;
         }
+    }
+
+    // Backward-compatible alias
+    _wsSend(message) {
+        return this._socketSend(message);
+    }
+
+    // ===================================================================
+    // Streaming bubble helpers
+    // ===================================================================
+
+    /** @private */
+    _ensureStreamingBubble() {
+        if (this._streamingContainer && this._streamingBubble) return;
+        if (!this.chatMessages) return;
+
+        this._streamingContainer = document.createElement('div');
+        this._streamingContainer.className = 'message-item';
+
+        // Avatar
+        const avatarRow = document.createElement('div');
+        avatarRow.className = 'message-avatar';
+        const figure = document.createElement('figure');
+        figure.className = 'avatar';
+        const avatarSpan = document.createElement('span');
+        avatarSpan.className = 'avatar-title rounded-circle';
+        avatarSpan.style.backgroundColor = '#17a2b8';
+        avatarSpan.innerHTML = '<i class="fas fa-robot"></i>';
+        figure.appendChild(avatarSpan);
+        avatarRow.appendChild(figure);
+
+        const infoDiv = document.createElement('div');
+        const nameEl = document.createElement('h5');
+        nameEl.textContent = 'AI Asistent';
+        infoDiv.appendChild(nameEl);
+        avatarRow.appendChild(infoDiv);
+        this._streamingContainer.appendChild(avatarRow);
+
+        // Content bubble
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        this._streamingBubble = document.createElement('p');
+        this._streamingBubble.style.whiteSpace = 'pre-wrap';
+        this._streamingBubble.style.wordBreak = 'break-word';
+        this._streamingBubble.style.marginBottom = '0';
+        contentDiv.appendChild(this._streamingBubble);
+        this._streamingContainer.appendChild(contentDiv);
+
+        this.chatMessages.appendChild(this._streamingContainer);
+    }
+
+    /** @private */
+    _clearStreamingBubble() {
+        if (this._streamingContainer && this._streamingContainer.parentNode) {
+            this._streamingContainer.parentNode.removeChild(this._streamingContainer);
+        }
+        this._streamingContainer = null;
+        this._streamingBubble = null;
     }
 
     // ===================================================================

@@ -141,6 +141,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='js/unified-chat.js') }}"></script>
 <script>
     $(document).ready(function () {
@@ -153,7 +154,6 @@
         const chat = new UnifiedChat({
             container: '#conversations-chat',
             readOnly: false,
-            wsUrl: 'wss://api.edu-ai.eu/ws/roleplay/',
             maxMessageLength: 500,
 
             // Flag button callback → open the flag modal

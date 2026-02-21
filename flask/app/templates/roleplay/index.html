@@ -230,7 +230,8 @@
     </div>
 </body>
 
-<!-- Unified Chat JS -->
+<!-- Socket.IO Client + Unified Chat JS -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='js/unified-chat.js') }}"></script>
 
 <script>
@@ -249,7 +250,6 @@
     // ── Initialise unified chat ──────────────────────────
     const chat = new UnifiedChat({
         container: '#live-chat',
-        wsUrl: 'wss://api.edu-ai.eu/ws/roleplay/',
         maxMessageLength: 500,
 
         onFlag: function (sessionId, content, messageIndex) {
@@ -497,7 +497,7 @@
             // Step 3: Send first message
             const firstMsg = instructions ||
                 "Představ se mi prosím, stručně vysvětli svou specializaci a řekni, jakým stylem budeš komunikovat.";
-            chat._wsSend(firstMsg);
+            chat._socketSend(firstMsg);
 
             chat.setInputEnabled(true);
             if (chat.msgInput) chat.msgInput.focus();
