@@ -267,7 +267,7 @@ def conversations():
             role_title = "Konverzace"
             role_brief = ""
             if chat_history and len(chat_history) > 0:
-                first_msg = chat_history[0]
+                first_msg = chat_history[0] if len(chat_history) > 0 else {"role": "", "content": ""}
                 if first_msg.get('role') == 'system':
                     content = first_msg.get('content', '')
                     if 'v roli' in content:
