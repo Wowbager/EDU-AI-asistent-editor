@@ -266,8 +266,8 @@ def conversations():
             # Extract role info
             role_title = "Konverzace"
             role_brief = ""
-            if chat_history and len(chat_history) > 0:
-                first_msg = chat_history[0] if len(chat_history) > 0 else {"role": "", "content": ""}
+            if chat_history and len(chat_history) > 1:
+                first_msg = chat_history[0] if len(chat_history) > 1 else {"role": "", "content": ""}
                 if first_msg.get('role') == 'system':
                     content = first_msg.get('content', '')
                     if 'v roli' in content:
@@ -359,9 +359,9 @@ def conversations():
         role_title = "Konverzace"
         role_brief = ""
         
-        if chat_history and len(chat_history) > 0:
+        if chat_history and len(chat_history) > 1:
             # Check if first message is system message with role info
-            first_msg = chat_history[0] if len(chat_history) > 0 else {"role": "", "content": ""}
+            first_msg = chat_history[0] if len(chat_history) > 1 else {"role": "", "content": ""}
             if first_msg.get('role') == 'system':
                 content = first_msg.get('content', '')
                 # Try to extract role title from system message
