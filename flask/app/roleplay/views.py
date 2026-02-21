@@ -266,7 +266,9 @@ def conversations():
             # Extract role info
             role_title = "Konverzace"
             role_brief = ""
-            if chat_history and len(chat_history) > 1:
+
+            print(chat_history)
+            if chat_history and len(chat_history) > 0:
                 first_msg = chat_history[0] if len(chat_history) > 1 else {"role": "", "content": ""}
                 if first_msg.get('role') == 'system':
                     content = first_msg.get('content', '')
@@ -289,13 +291,21 @@ def conversations():
                     'summary': f.summary,
                     'timestamp': f.timestamp.isoformat() if f.timestamp else None
                 })
+
+            problem_description = "Zatím nenachytány žádné podezřelé odpovědi."
+            if flagged_messages:
+                for f in flagged_messages:
+                    if f.summary:
+                        problem_description = f.summary
+                        break
             
             sessions_data.append({
                 'session': {
                     'id': session_id,
                     'role_title': role_title,
                     'role_brief': role_brief,
-                    'created_at': data['flags'][0].timestamp.isoformat() if data['flags'] else None
+                    'created_at': data['flags'][0].timestamp.isoformat() if data['flags'] else None,
+                    'problem_description': problem_description
                 },
                 'message_count': len(chat_history),
                 'chat_history': chat_history,
@@ -359,7 +369,7 @@ def conversations():
         role_title = "Konverzace"
         role_brief = ""
         
-        if chat_history and len(chat_history) > 1:
+        if chat_history and len(chat_history) > 0:
             # Check if first message is system message with role info
             first_msg = chat_history[0] if len(chat_history) > 1 else {"role": "", "content": ""}
             if first_msg.get('role') == 'system':
@@ -376,13 +386,21 @@ def conversations():
                     if match:
                         role_title = match.group(1)
                         role_brief = match.group(2)
+
+        problem_description = "Zatím nenachytány žádné podezřelé odpovědi."
+        if flagged_messages:
+            for f in flagged_messages:
+                if f.summary:
+                    problem_description = f.summary
+                    break
         
         sessions_data.append({
             'session': {
                 'id': session.id,
                 'role_title': role_title,
                 'role_brief': role_brief,
-                'created_at': session.created_at.isoformat() if session.created_at else None
+                'created_at': session.created_at.isoformat() if session.created_at else None,
+                'problem_description': problem_description
             },
             'message_count': len(chat_history),
             'chat_history': chat_history,

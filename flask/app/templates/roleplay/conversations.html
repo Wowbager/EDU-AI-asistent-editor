@@ -218,7 +218,7 @@
 
             // Build header with Continue button
             const title = (sessionData.session.role_title || 'Konverzace').replace('Role ', '');
-            const brief = sessionData.session.role_brief || '';
+            const problem = sessionData.session.problem_description || '';
             chat.setHeader(`
                 <div class="chat-header-user">
                     <a class="btn btn-outline-light" href="javascript:void(0);" id="back2conversations">
@@ -231,13 +231,13 @@
                     </figure>
                     <div>
                         <h5>${title}</h5>
-                        <p class="text-muted small mb-0">${brief}</p>
+                        <p class="text-muted small mb-0">${problem}</p>
                     </div>
-                    <button class="btn btn-outline-light btn-sm ml-auto" id="continue-conversation-btn"
-                            title="Pokračovat v konverzaci">
-                        <i class="fas fa-play me-1"></i> Pokračovat
-                    </button>
                 </div>
+                <button class="btn btn-outline-light btn-sm ml-auto" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
+                        title="Pokračovat v konverzaci">
+                    <i class="fas fa-play me-2"></i> Pokračovat
+                </button>
             `);
 
             // Load history via unified component
@@ -256,7 +256,7 @@
         $(document).on('click', '#continue-conversation-btn', async function () {
             const btn = this;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Připojuji...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Připojuji...';
 
             try {
                 const response = await fetch(`${FASTAPI_URL}/sessions/resume`, {
@@ -273,12 +273,12 @@
                 if (chat.msgInput) chat.msgInput.focus();
 
                 // Update button to show connected state
-                btn.innerHTML = '<i class="fas fa-check me-1"></i> Připojeno';
+                btn.innerHTML = '<i class="fas fa-check me-2"></i> Připojeno';
                 btn.className = 'btn btn-success btn-sm ml-auto';
             } catch (error) {
                 chat.addSystemMessage(`Nepodařilo se obnovit konverzaci: ${error.message}`);
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-play me-1"></i> Pokračovat';
+                btn.innerHTML = '<i class="fas fa-play me-2"></i> Pokračovat';
             }
         });
 
