@@ -293,10 +293,10 @@ def conversations():
                 })
 
             problem_description = "Zatím nenachytány žádné podezřelé odpovědi."
-            if flagged_messages:
-                for f in flagged_messages:
-                    if f.summary:
-                        problem_description = f.summary
+            if flagged_messages_list:
+                for f in flagged_messages_list:
+                    if f['summary']:
+                        problem_description = f['summary']
                         break
             
             sessions_data.append({
