@@ -195,11 +195,19 @@
             }
         });
 
+        // FastAPI URL for session resume
+        const FASTAPI_URL = window.FASTAPI_SOCKETIO_URL ||
+            ((window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+                ? "http://localhost:6767" : "https://api.edu-ai.eu");
+
         // ── Conversation list click ──────────────────────────
         $(document).on('click', '.conversation-item', function () {
             const sessionId = $(this).data('session-id');
             currentSessionId = sessionId;
             chat.sessionId = sessionId;
+
+            // Disconnect any previous live session
+            chat.disconnect();
 
             const sessionData = sessionsData.find(s => s.session.id === sessionId);
             if (!sessionData) return;
@@ -208,7 +216,7 @@
             $('.conversation-item').removeClass('open-chat');
             $(this).addClass('open-chat');
 
-            // Build header
+            // Build header with Continue button
             const title = (sessionData.session.role_title || 'Konverzace').replace('Role ', '');
             const brief = sessionData.session.role_brief || '';
             chat.setHeader(`
@@ -225,6 +233,10 @@
                         <h5>${title}</h5>
                         <p class="text-muted small mb-0">${brief}</p>
                     </div>
+                    <button class="btn btn-outline-light btn-sm ml-auto" id="continue-conversation-btn"
+                            title="Pokračovat v konverzaci">
+                        <i class="fas fa-play me-1"></i> Pokračovat
+                    </button>
                 </div>
             `);
 
@@ -235,7 +247,39 @@
                 isPublic:          sessionData.is_public          || false,
             });
 
+            // Show chat in read-only mode initially (footer hidden)
             chat.show();
+            if (chat.chatFooter) chat.chatFooter.style.display = 'none';
+        });
+
+        // ── Continue conversation (resume WebSocket) ─────────
+        $(document).on('click', '#continue-conversation-btn', async function () {
+            const btn = this;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Připojuji...';
+
+            try {
+                const response = await fetch(`${FASTAPI_URL}/sessions/resume`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ conversation_id: currentSessionId }),
+                });
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.detail || payload.error || `Server error: ${response.status}`);
+
+                await chat.connect(payload.session_id);
+                chat.enableLiveMode();
+                chat.setInputEnabled(true);
+                if (chat.msgInput) chat.msgInput.focus();
+
+                // Update button to show connected state
+                btn.innerHTML = '<i class="fas fa-check me-1"></i> Připojeno';
+                btn.className = 'btn btn-success btn-sm ml-auto';
+            } catch (error) {
+                chat.addSystemMessage(`Nepodařilo se obnovit konverzaci: ${error.message}`);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-play me-1"></i> Pokračovat';
+            }
         });
 
         // ── Back button ──────────────────────────────────────
@@ -243,6 +287,8 @@
             chat.disconnect();
             chat.hide();
             chat.clear();
+            chat.readOnly = true;
+            if (chat.chatFooter) chat.chatFooter.style.display = 'none';
             $('.conversation-item').removeClass('open-chat');
             currentSessionId = null;
             if ($(window).width() < 1200) {
