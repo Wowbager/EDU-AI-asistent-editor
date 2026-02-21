@@ -364,7 +364,52 @@
             subjectInput.value = subject;
             customRoleName.value = roleTitle;
             customRoleBrief.value = "";
-            customInstructions.value = roleBrief;
+            customInstructions.dispatchEvent(new Event("input"));
+
+            // Close the modal
+            if (aiRolesModalEl && aiRolesModalEl.contains(document.activeElement)) {
+                document.activeElement.blur();
+            }
+            $("#aiRolesModal").modal("hide");
+
+            startBtn.disabled = true;
+            customInstructions.readOnly = true;
+
+            try {
+                const response = await fetch(
+                    "{{ url_for('roleplay.generate_role_instructions') }}",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            role_title: roleTitle,
+                            subject: subject,
+                        }),
+                    },
+                );
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(
+                        errorData.error || `Server error: ${response.status}`,
+                    );
+                }
+
+                const data = await response.json();
+                customInstructions.value =
+                    (data.instructions && data.instructions.trim()) || "";
+            } catch (error) {
+                console.error("Chyba při generování instrukcí role:", error);
+                alert(`Nepodařilo se vygenerovat instrukce: ${error.message}`);
+                customInstructions.value = "";
+            } finally {
+                customInstructions.readOnly = false;
+                startBtn.disabled = false;
+                customInstructions.dispatchEvent(new Event("input"));
+                await startCustomChat();
+            }
 
             const len = roleBrief.length;
             customCharCounter.textContent = `${len}/1500 znaků`;
