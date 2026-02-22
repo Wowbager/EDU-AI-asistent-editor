@@ -213,6 +213,12 @@ class UnifiedChat {
         }
     }
 
+    setFooter(html) {
+        if (this.chatFooter) {
+            this.chatFooter.innerHTML = html;
+        }
+    }
+
     /** Show the chat area (hide placeholder, show body + footer). */
     show() {
         this.container.classList.add('open');

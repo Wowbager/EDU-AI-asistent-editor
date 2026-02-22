@@ -234,9 +234,12 @@
                         <p class="text-muted small mb-0">${problem}</p>
                     </div>
                 </div>
-                <button class="btn btn-outline-light btn-sm ml-auto" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
+            `);
+
+            chat.setFooter(`
+                <button class="btn btn-outline-light btn-sm" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
                         title="Pokračovat v konverzaci">
-                    <i class="fas fa-play me-2"></i> Pokračovat
+                    <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
                 </button>
             `);
 
@@ -247,9 +250,15 @@
                 isPublic:          sessionData.is_public          || false,
             });
 
-            // Show chat in read-only mode initially (footer hidden)
+            // Show chat
             chat.show();
-            if (chat.chatFooter) chat.chatFooter.style.display = 'none';
+            if (chat.chatFooter) {
+                chat.chatFooter.style.display = 'flex';
+                chat.chatFooter.style.justifyContent = 'center';
+            }
+
+            // Auto-reconnect conversation
+            $(`#continue-conversation-btn`).trigger('click');
         });
 
         // ── Continue conversation (resume WebSocket) ─────────

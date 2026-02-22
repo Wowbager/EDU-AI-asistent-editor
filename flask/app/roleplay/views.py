@@ -268,18 +268,19 @@ def conversations():
             role_brief = ""
 
             if chat_history and len(chat_history) > 0:
-                first_msg = chat_history[0] if len(chat_history) > 1 else {"role": "", "content": ""}
-                if first_msg.get('role') == 'system':
-                    content = first_msg.get('content', '')
-                    if 'v roli' in content:
-                        import re
-                        match = re.search(r"v roli '([^']+)'", content)
-                        if match:
-                            role_title = match.group(1)
-                        match = re.search(r"'([^']+)' \(([^)]+)\)", content)
-                        if match:
-                            role_title = match.group(1)
-                            role_brief = match.group(2)
+                for first_msg in chat_history:
+                    if first_msg.get('role') == 'system':
+                        content = first_msg.get('content', '')
+                        if 'v roli' in content:
+                            import re
+                            match = re.search(r"v roli '([^']+)'", content)
+                            if match:
+                                role_title = match.group(1)
+                            match = re.search(r"'([^']+)' \(([^)]+)\)", content)
+                            if match:
+                                role_title = match.group(1)
+                                role_brief = match.group(2)
+                    break
             
             # Create flagged content list with summaries
             flagged_messages_list = []
@@ -369,22 +370,22 @@ def conversations():
         role_brief = ""
         
         if chat_history and len(chat_history) > 0:
-            # Check if first message is system message with role info
-            first_msg = chat_history[0] if len(chat_history) > 1 else {"role": "", "content": ""}
-            if first_msg.get('role') == 'system':
-                content = first_msg.get('content', '')
-                # Try to extract role title from system message
-                if 'v roli' in content:
-                    # Extract role title from pattern "v roli 'Title'"
-                    import re
-                    match = re.search(r"v roli '([^']+)'", content)
-                    if match:
-                        role_title = match.group(1)
-                    # Extract brief if available
-                    match = re.search(r"'([^']+)' \(([^)]+)\)", content)
-                    if match:
-                        role_title = match.group(1)
-                        role_brief = match.group(2)
+            for first_msg in chat_history:
+                if first_msg.get('role') == 'system':
+                    content = first_msg.get('content', '')
+                    # Try to extract role title from system message
+                    if 'v roli' in content:
+                        # Extract role title from pattern "v roli 'Title'"
+                        import re
+                        match = re.search(r"v roli '([^']+)'", content)
+                        if match:
+                            role_title = match.group(1)
+                        # Extract brief if available
+                        match = re.search(r"'([^']+)' \(([^)]+)\)", content)
+                        if match:
+                            role_title = match.group(1)
+                            role_brief = match.group(2)
+                break
 
         problem_description = "Zatím nenachytány žádné podezřelé odpovědi."
         if flagged_messages:

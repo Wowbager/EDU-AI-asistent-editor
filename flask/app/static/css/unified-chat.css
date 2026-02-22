@@ -48,6 +48,7 @@
 /* ── Ensure the message body scrolls ──────────────────────────────── */
 .uc-body {
     overflow-y: auto;
+    scroll-behavior: smooth;
 }
 
 /* ── Flag info banner inside a message ────────────────────────────── */
