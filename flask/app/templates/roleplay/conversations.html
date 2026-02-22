@@ -208,6 +208,7 @@
 
             // Disconnect any previous live session
             chat.disconnect();
+            $(".chat-footer-continue").remove();
 
             const sessionData = sessionsData.find(s => s.session.id === sessionId);
             if (!sessionData) return;
