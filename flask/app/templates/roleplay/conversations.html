@@ -236,12 +236,17 @@
                 </div>
             `);
 
-            chat.setFooter(`
-                <button class="btn btn-outline-light btn-sm" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
+            const continueFooter = document.createElement('div');
+            continueFooter.className = 'chat-footer-continue';
+            continueFooter.innerHTML = `
+                <button class="btn btn-outline-light btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
                         title="Pokračovat v konverzaci">
                     <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
                 </button>
-            `);
+            `;
+            continueFooter.style.display = 'flex';
+            continueFooter.style.justifyContent = 'center';
+            continueFooter.style.padding = '20px';
 
             // Load history via unified component
             chat.loadHistory(sessionData.chat_history, {
@@ -250,12 +255,13 @@
                 isPublic:          sessionData.is_public          || false,
             });
 
-            // Show chat
+            // Show chat and continue button, hide regular footer
             chat.show();
             if (chat.chatFooter) {
-                chat.chatFooter.style.display = 'flex';
-                chat.chatFooter.style.justifyContent = 'center';
+                chat.chatFooter.style.display = 'none';
             }
+
+            document.querySelector(".chat").appendChild(continueFooter);
 
             // Auto-reconnect conversation
             $(`#continue-conversation-btn`).trigger('click');
@@ -284,6 +290,8 @@
                 // Update button to show connected state
                 btn.innerHTML = '<i class="fas fa-check me-2"></i> Připojeno';
                 btn.className = 'btn btn-success btn-sm ml-auto';
+
+                $(".chat-footer-continue").remove();
             } catch (error) {
                 chat.addSystemMessage(`Nepodařilo se obnovit konverzaci: ${error.message}`);
                 btn.disabled = false;
