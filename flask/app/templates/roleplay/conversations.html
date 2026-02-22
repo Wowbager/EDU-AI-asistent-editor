@@ -115,7 +115,7 @@
                                     Zveřejnit toto označení
                                 </label>
                                 <small class="form-text text-muted">
-                                    Ostatní uživatelé budou moci vidět tuto konverzaci a důvod označení.
+                                    Ostatní uživatelé uvidí tuto konverzaci a důvod označení.
                                 </small>
                             </div>
                         </div>
@@ -295,7 +295,7 @@
             } catch (error) {
                 chat.addSystemMessage(`Nepodařilo se obnovit konverzaci: ${error.message}`);
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-play me-2"></i> Pokračovat';
+                btn.innerHTML = '<i class="fas fa-play me-2"></i> Pokračovat v konverzaci';
             }
         });
 
@@ -311,6 +311,7 @@
             if ($(window).width() < 1200) {
                 $('body').removeClass('navigation-open');
             }
+            $(".chat-footer-continue").remove();
         });
 
         // ── Search ───────────────────────────────────────────
@@ -342,7 +343,7 @@
             const flagId  = $('#flagId').val();
 
             if (!summary) {
-                alert('Prosím, zadejte popis problému.');
+                alert('Prosím, zadejte popis úlovku.');
                 return;
             }
 
