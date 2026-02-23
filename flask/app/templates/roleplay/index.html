@@ -464,7 +464,7 @@
             setLiveChatHeader(`<strong>Role:</strong> ${roleName} | <strong>Předmět:</strong> ${subject}`);
             chat.clear();
             chat.show();
-            chat.addSystemMessage("Připravuji chat...");
+            chat.addSystemMessage("Připravuji chat...", true);
             $("#customChatModal").modal("hide");
 
             // Step 1: Generate session ID
@@ -489,7 +489,7 @@
             currentSessionId = data.session_id;
 
             // Step 2: Connect via WebSocket
-            chat.addSystemMessage("Připojuji k chatovacímu serveru...");
+            chat.addSystemMessage("Připojuji k chatovacímu serveru...", true);
             await chat.connect(currentSessionId);
             chat.clearProcessingMessages();
 
@@ -557,7 +557,7 @@
         setLiveChatHeader(`<strong>Role:</strong> ${roleTitle}`);
         chat.clear();
         chat.show();
-        chat.addSystemMessage("Obnovuji konverzaci...");
+        chat.addSystemMessage("Obnovuji konverzaci...", true);
 
         try {
             await resumeConversation(continueSessionId, true);
