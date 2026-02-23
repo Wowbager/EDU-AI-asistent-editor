@@ -2,6 +2,7 @@ import json
 import traceback
 import uuid
 import os
+import re
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash
 from flask_login import current_user, login_required
 from app import app, db
@@ -28,7 +29,12 @@ from .config import (
     MAX_CUSTOM_INSTRUCTIONS_LENGTH,
     CHAT_MODEL,
     ROLE_GENERATION_MODEL,
-    ROLE_GENERATION_TIMEOUT
+    ROLE_GENERATION_TIMEOUT,
+    TEAM_INVITE_MAX_EMAILS_PER_REQUEST,
+    TEAM_INVITE_MAX_PER_HOUR_PER_INVITER,
+    TEAM_INVITE_MAX_PER_DAY_PER_TEAM,
+    TEAM_INVITE_RESEND_COOLDOWN_HOURS,
+    TEAM_INVITE_MAX_MESSAGE_LENGTH
 )
 
 roleplay = Blueprint("roleplay", __name__)
@@ -1027,37 +1033,87 @@ def invite_to_team(team_id):
     
     emails = data.get("emails", [])
     message = data.get("message", "").strip()
+    message = message[:TEAM_INVITE_MAX_MESSAGE_LENGTH]
     
     if not emails or not isinstance(emails, list):
         return jsonify({"success": False, "error": "Prosím zadejte alespoň jeden email."}), 400
+
+    if len(emails) > TEAM_INVITE_MAX_EMAILS_PER_REQUEST:
+        return jsonify({
+            "success": False,
+            "error": f"Najednou lze pozvat maximálně {TEAM_INVITE_MAX_EMAILS_PER_REQUEST} adres."
+        }), 400
     
     try:
+        email_pattern = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+        now_utc = datetime.utcnow()
+        inviter_window_start = now_utc - timedelta(hours=1)
+        team_window_start = now_utc - timedelta(days=1)
+        resend_cooldown_start = now_utc - timedelta(hours=TEAM_INVITE_RESEND_COOLDOWN_HOURS)
+
+        inviter_invites_last_hour = TeamInvitation.query.filter(
+            TeamInvitation.inviter_id == current_user.id,
+            TeamInvitation.created_at >= inviter_window_start
+        ).count()
+
+        team_invites_last_day = TeamInvitation.query.filter(
+            TeamInvitation.team_id == team_id,
+            TeamInvitation.created_at >= team_window_start
+        ).count()
+
+        if inviter_invites_last_hour >= TEAM_INVITE_MAX_PER_HOUR_PER_INVITER:
+            return jsonify({
+                "success": False,
+                "error": "Dosáhli jste hodinového limitu pozvánek. Zkuste to později."
+            }), 429
+
+        if team_invites_last_day >= TEAM_INVITE_MAX_PER_DAY_PER_TEAM:
+            return jsonify({
+                "success": False,
+                "error": "Tým dosáhl denního limitu pozvánek. Zkuste to zítra."
+            }), 429
+
+        # Normalize and deduplicate input emails while preserving order
+        normalized_emails = []
+        seen_emails = set()
+        for raw_email in emails:
+            if not isinstance(raw_email, str):
+                continue
+            normalized_email = raw_email.strip().lower()
+            if normalized_email and normalized_email not in seen_emails:
+                normalized_emails.append(normalized_email)
+                seen_emails.add(normalized_email)
+
         invited_count = 0
-        errors = []
+        invalid_count = 0
+        skipped_count = 0
+        limit_hit = False
+        warnings = []
         
-        for email in emails:
-            email = email.strip().lower()
-            
-            if not email:
+        for email in normalized_emails:
+            if invited_count + inviter_invites_last_hour >= TEAM_INVITE_MAX_PER_HOUR_PER_INVITER:
+                limit_hit = True
+                break
+
+            if invited_count + team_invites_last_day >= TEAM_INVITE_MAX_PER_DAY_PER_TEAM:
+                limit_hit = True
+                break
+
+            if email == current_user.email:
+                skipped_count += 1
                 continue
             
-            # Check if email is valid (basic check)
-            if "@" not in email:
-                errors.append(f"{email}: Neplatný email")
+            if not email_pattern.match(email):
+                invalid_count += 1
                 continue
             
-            # Check if user exists
+            # Existing users already in team are skipped (generic response, no enumeration leak)
             user = User.query.filter_by(email=email).first()
-            if not user:
-                errors.append(f"{email}: Uživatel s tímto emailem neexistuje")
-                continue
-            
-            # Check if already a member
             if user in team.members:
-                errors.append(f"{email}: Již je členem týmu")
+                skipped_count += 1
                 continue
-            
-            # Check if already invited
+
+            # Skip if pending invitation already exists
             existing_invite = TeamInvitation.query.filter_by(
                 team_id=team_id,
                 invitee_email=email,
@@ -1065,10 +1121,19 @@ def invite_to_team(team_id):
             ).first()
             
             if existing_invite:
-                errors.append(f"{email}: Již má nevyřízenou pozvánku")
+                skipped_count += 1
+                continue
+
+            # Cooldown protection to avoid repeated sending to the same target
+            recent_invite = TeamInvitation.query.filter(
+                TeamInvitation.team_id == team_id,
+                TeamInvitation.invitee_email == email,
+                TeamInvitation.created_at >= resend_cooldown_start
+            ).first()
+            if recent_invite:
+                skipped_count += 1
                 continue
             
-            # Create invitation
             invitation = TeamInvitation(
                 team_id=team_id,
                 inviter_id=current_user.id,
@@ -1078,17 +1143,29 @@ def invite_to_team(team_id):
             )
             db.session.add(invitation)
             invited_count += 1
+
+        if invalid_count > 0:
+            warnings.append("Některé adresy mají neplatný formát a byly přeskočeny.")
+        if skipped_count > 0:
+            warnings.append("Některé adresy nebyly zpracovány (duplicitní, nedávno pozvané nebo již členové týmu).")
+        if limit_hit:
+            warnings.append("Byl dosažen bezpečnostní limit, zbývající adresy nebyly zpracovány.")
         
         db.session.commit()
         
+        processed_count = invited_count + invalid_count + skipped_count
         result = {
             "success": True,
-            "message": f"Odesláno {invited_count} pozvánek!",
-            "invited_count": invited_count
+            "message": "Pozvánky byly zpracovány.",
+            "invited_count": invited_count,
+            "processed_count": processed_count,
+            "skipped_count": invalid_count + skipped_count,
+            "limit_hit": limit_hit
         }
         
-        if errors:
-            result["errors"] = errors
+        if warnings:
+            result["warnings"] = warnings
+            result["errors"] = warnings
         
         return jsonify(result)
         

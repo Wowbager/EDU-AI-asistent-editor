@@ -23,6 +23,13 @@ from .ai_prompts import (
 # Competition settings
 COMPETITION_RUNNING = True  # Set to False to disable all competition features
 
+# Team invitation safety limits
+TEAM_INVITE_MAX_EMAILS_PER_REQUEST = int(os.getenv('TEAM_INVITE_MAX_EMAILS_PER_REQUEST', '5'))
+TEAM_INVITE_MAX_PER_HOUR_PER_INVITER = int(os.getenv('TEAM_INVITE_MAX_PER_HOUR_PER_INVITER', '20'))
+TEAM_INVITE_MAX_PER_DAY_PER_TEAM = int(os.getenv('TEAM_INVITE_MAX_PER_DAY_PER_TEAM', '50'))
+TEAM_INVITE_RESEND_COOLDOWN_HOURS = int(os.getenv('TEAM_INVITE_RESEND_COOLDOWN_HOURS', '24'))
+TEAM_INVITE_MAX_MESSAGE_LENGTH = int(os.getenv('TEAM_INVITE_MAX_MESSAGE_LENGTH', '500'))
+
 # Redis settings
 CHAT_HISTORY_TTL = 86400 * 14  # Chat history TTL in Redis (14 days)
 

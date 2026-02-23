@@ -640,6 +640,11 @@ content %}
                             rows="3"
                             placeholder="Připojte se k našemu týmu!"
                         ></textarea>
+                        <small class="text-muted">
+                            Pozvánky jsou zpracovávány po dávkách a některé mohou být přeskočeny.
+                        </small>
+                    </div>
+                    <div id="invite-result-summary" class="alert alert-light border" style="display: none;"></div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -1089,6 +1094,9 @@ content %}
             </div>
         `;
         document.getElementById('invite-message').value = '';
+        const inviteResultSummary = document.getElementById('invite-result-summary');
+        inviteResultSummary.style.display = 'none';
+        inviteResultSummary.innerHTML = '';
 
         document.getElementById('confirm-invite-members').onclick = async function() {
             const emails = [];
@@ -1114,13 +1122,50 @@ content %}
                 const data = await response.json();
 
                 if (data.success) {
-                    let msg = data.message;
-                    if (data.errors && data.errors.length > 0) {
-                        msg += '\n\nChyby:\n' + data.errors.join('\n');
+                    const invitedCount = Number.isInteger(data.invited_count) ? data.invited_count : 0;
+                    const skippedCount = Number.isInteger(data.skipped_count) ? data.skipped_count : 0;
+                    const processedCount = Number.isInteger(data.processed_count)
+                        ? data.processed_count
+                        : invitedCount + skippedCount;
+                    const limitHit = Boolean(data.limit_hit);
+                    const warnings = Array.isArray(data.warnings)
+                        ? data.warnings
+                        : (Array.isArray(data.errors) ? data.errors : []);
+
+                    let summaryMessage = `Pozvánky zpracovány: odesláno ${invitedCount}, přeskočeno ${skippedCount}.`;
+                    if (limitHit) {
+                        summaryMessage += ' Byl dosažen bezpečnostní limit.';
                     }
-                    showToast(msg, data.errors ? 'warning' : 'success');
-                    $('#inviteMembersModal').modal('hide');
-                    if (data.invited_count > 0) {
+
+                    let detailsHtml = '';
+                    if (warnings.length > 0) {
+                        const warningList = warnings.map(w => `<li>${w}</li>`).join('');
+                        detailsHtml = `
+                            <details class="mt-2">
+                                <summary>Detaily zpracování</summary>
+                                <ul class="mb-0 mt-2">${warningList}</ul>
+                            </details>
+                        `;
+                    }
+
+                    const inviteResultSummary = document.getElementById('invite-result-summary');
+                    inviteResultSummary.innerHTML = `
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            <span class="badge bg-success">Odesláno: ${invitedCount}</span>
+                            <span class="badge bg-secondary">Přeskočeno: ${skippedCount}</span>
+                            <span class="badge bg-info text-dark">Zpracováno: ${processedCount}</span>
+                            ${limitHit ? '<span class="badge bg-warning text-dark">Limit dosažen</span>' : ''}
+                        </div>
+                        <div>${summaryMessage}</div>
+                        ${detailsHtml}
+                    `;
+                    inviteResultSummary.style.display = 'block';
+
+                    const toastType = (warnings.length > 0 || skippedCount > 0 || limitHit) ? 'warning' : 'success';
+                    showToast(summaryMessage, toastType);
+
+                    if (invitedCount > 0) {
+                        $('#inviteMembersModal').modal('hide');
                         setTimeout(() => location.reload(), 1500);
                     }
                 } else {
