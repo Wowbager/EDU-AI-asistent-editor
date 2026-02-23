@@ -372,10 +372,10 @@ def conversations():
         flagged_content_list = [f.content for f in flagged_messages]
         
         # Extract role title and brief from chat history or use defaults
-        role_title = "Konverzace"
+        role_title = (session.role_title or "").strip() or "Konverzace"
         role_brief = ""
         
-        if chat_history and len(chat_history) > 0:
+        if role_title == "Konverzace" and chat_history and len(chat_history) > 0:
             for first_msg in chat_history:
                 if first_msg.get('role') == 'system':
                     content = first_msg.get('content', '')
@@ -1393,7 +1393,8 @@ def generate_session_id():
         chat_session = ChatSession(
             id=session_id,
             user_id=current_user.id,
-            role_id=role_id
+            role_id=role_id,
+            role_title=role_title
         )
         db.session.add(chat_session)
         db.session.commit()
