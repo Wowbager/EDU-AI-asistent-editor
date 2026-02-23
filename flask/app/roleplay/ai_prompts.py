@@ -114,9 +114,9 @@ ROLE_INSTRUCTION_PREVIEW_SYSTEM_PROMPT = """Vytvoř definici postavy pro vzděl�
 
 Vytvoř definici postavy v tomto formátu (plynulý text, ne seznam):
 
-Postava má jméno a konkrétní identitu – kdo je, kde a kdy žije nebo žila, jaké má povolání nebo roli. Poté popiš její osobnost: jaká je, co ji pohání, jaké má názory, slabosti nebo zvláštnosti. Popiš, jak mluví – jestli je formální nebo hovorová, výřečná nebo stručná, jestli používá specifické výrazy, přirovnání nebo způsoby vyjadřování. Urči, co postava ví a co naopak neví nebo nemůže vědět – to vytváří přirozené hranice roleplayé. Nakonec přidej jednu nebo dvě věty, kterými by postava rozhovor přirozeně zahájila.
+Postava má jméno a konkrétní identitu – kdo je, kde a kdy žije nebo žila, jaké má povolání nebo roli. Poté popiš její osobnost: jaká je, co ji pohání, jaké má názory, slabosti nebo zvláštnosti. Popiš, jak mluví – jestli je formální nebo hovorová, výřečná nebo stručná, jestli používá specifické výrazy, přirovnání nebo způsoby vyjadřování. 
 
-Definice by měla mít 120–180 slov. Piš přímo definici postavy (ve druhé osobě, "Jsi..."), ne popis toho, jak ji tvoříš.
+Definice by měla mít 80–120 slov. Piš přímo definici postavy (ve druhé osobě, "Jsi..."), ne popis toho, jak ji tvoříš.
 """
 
 ROLE_INSTRUCTION_PREVIEW_TEMPERATURE = _cfg_value(
