@@ -105,7 +105,11 @@ def generate_roles_from_subject(subject: str, model: str, request_timeout: int) 
                             "type": "object",
                             "properties": {
                                 "id": {"type": "string"},
-                                "title": {"type": "string"}
+                                "title": {
+                                    "type": "string",
+                                    "minLength": 2,
+                                    "maxLength": 80
+                                }
                             },
                             "required": ["id", "title"],
                             "additionalProperties": False

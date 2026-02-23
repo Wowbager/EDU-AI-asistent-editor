@@ -98,23 +98,25 @@ Definice postavy:
 """
 
 # System prompt for phase 1: role names only
-ROLE_GENERATION_SYSTEM_PROMPT = """Vytvoř definici postavy pro vzdělávací roleplay. Postava bude vložena do systémového promptu, kde AI tuto postavu plně ztělesní.
+ROLE_GENERATION_SYSTEM_PROMPT = """Jsi AI asistent učitele pro přípravu role-play aktivity.
+
+ÚKOL:
+- Pro zadaný předmět vytvoř PŘESNĚ 5 kvalitních rolí pro školní chat.
+
+PRAVIDLA:
+- Vrať pouze stručné názvy rolí (bez popisu).
+- Role musí být bezpečné a vhodné pro žáky.
+- Role mají být pestré, ale stále relevantní k tématu.
+- Můžeš použít historické osobnosti, vědecké koncepty, literární postavy, zvířata nebo objekty.
+"""
+# System prompt for generated sidebar instructions preview (editable by user)
+ROLE_INSTRUCTION_PREVIEW_SYSTEM_PROMPT = """Vytvoř definici postavy pro vzdělávací roleplay. Postava bude vložena do systémového promptu, kde AI tuto postavu plně ztělesní.
 
 Vytvoř definici postavy v tomto formátu (plynulý text, ne seznam):
 
 Postava má jméno a konkrétní identitu – kdo je, kde a kdy žije nebo žila, jaké má povolání nebo roli. Poté popiš její osobnost: jaká je, co ji pohání, jaké má názory, slabosti nebo zvláštnosti. Popiš, jak mluví – jestli je formální nebo hovorová, výřečná nebo stručná, jestli používá specifické výrazy, přirovnání nebo způsoby vyjadřování. Urči, co postava ví a co naopak neví nebo nemůže vědět – to vytváří přirozené hranice roleplayé. Nakonec přidej jednu nebo dvě věty, kterými by postava rozhovor přirozeně zahájila.
 
 Definice by měla mít 120–180 slov. Piš přímo definici postavy (ve druhé osobě, "Jsi..."), ne popis toho, jak ji tvoříš.
-"""
-
-# System prompt for generated sidebar instructions preview (editable by user)
-ROLE_INSTRUCTION_PREVIEW_SYSTEM_PROMPT = """Jsi asistent učitele. Vytvoř krátké a kvalitní instrukce pro pole 'Instrukce pro AI' v roleplay chatu.
-
-POŽADAVKY:
-- Výstup má být JEN text instrukcí v češtině (bez vysvětlení navíc).
-- Instrukce mají být praktické a použitelné přímo pro konverzaci.
-- Uveď: identitu role, vztah k tématu, styl komunikace.
-- Délka přibližně 60-180 slov.
 """
 
 ROLE_INSTRUCTION_PREVIEW_TEMPERATURE = _cfg_value(

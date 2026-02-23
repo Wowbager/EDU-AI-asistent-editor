@@ -122,9 +122,14 @@ def get_roles():
         validated_roles = []
         for role in roles_data:
             if isinstance(role, dict) and 'id' in role and 'title' in role:
+                sanitized_title = re.sub(r"\s+", " ", str(role['title'])).strip()
+                if not sanitized_title or len(sanitized_title) > 80:
+                    print(f"Skipping invalid role title (length/content): {role.get('title')}")
+                    continue
+
                 validated_roles.append({
                     "id": str(role['id']),
-                    "title": str(role['title'])
+                    "title": sanitized_title
                 })
             else:
                 print(f"Malformed role object: {role}")
