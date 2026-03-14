@@ -361,7 +361,7 @@ class UnifiedChat {
         }
 
         // Flag / Unflag buttons (assistant only, non-public)
-        if (isAssistant && !isPublic && showFlagButton) {
+        if (isAssistant && showFlagButton) {
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'message-actions mt-2';
 
