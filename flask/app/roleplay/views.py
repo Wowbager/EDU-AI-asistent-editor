@@ -265,6 +265,8 @@ def conversations():
         for session_id, data in sessions_dict.items():
             # Get chat history
             chat_history = get_chat_history(session_id)
+            session = ChatSession.query.get(session_id)
+            
             
             # If no Redis history, get from database
             if not chat_history:
@@ -275,10 +277,10 @@ def conversations():
             team = Team.query.get(data['team_id']) if data['team_id'] else None
             
             # Extract role info
-            role_title = "Konverzace"
+            role_title = (session.role_title or "").strip() or "Konverzace"
             role_brief = ""
 
-            if chat_history and len(chat_history) > 0:
+            if role_title == "Konverzace" and chat_history and len(chat_history) > 0:
                 for first_msg in chat_history:
                     if first_msg.get('role') == 'system':
                         content = first_msg.get('content', '')
