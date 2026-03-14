@@ -325,7 +325,8 @@ def conversations():
                 'flagged_messages': flagged_messages_list,
                 'flagged_content_set': [f.content for f in data['flags']],
                 'team': {'name': team.name} if team else None,
-                'is_public': True
+                'is_public': True,
+                'is_posted_by_user': session.user_id == current_user.id if session else False
             })
         
         return render_template(

@@ -436,6 +436,8 @@ class UnifiedChat {
             flaggedContentSet = [],
             flaggedMessages = [],
             isPublic = false,
+            scrollToFlagged = false,
+            isPostedByUser = true,
         } = flaggedInfo;
 
         if (!messages || messages.length === 0) {
@@ -460,11 +462,18 @@ class UnifiedChat {
                 isFlagged,
                 flagInfo,
                 isPublic,
-                showFlagButton: !isPublic,
+                showFlagButton: isPostedByUser,
             });
         });
 
-        this.scrollToBottom();
+        if (scrollToFlagged) {
+            const flaggedEl = this.chatMessages.querySelector('.uc-flagged');
+            if (flaggedEl) {
+                flaggedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        } else {
+            this.scrollToBottom();
+        }
     }
 
     // ===================================================================
