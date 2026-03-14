@@ -354,7 +354,7 @@ class UnifiedChat {
         // Public flag reason badge
         if (isPublic && flagInfo && flagInfo.summary) {
             const badge = document.createElement('div');
-            badge.className = 'alert alert-warning mt-2 mb-0';
+            badge.className = 'alert alert-warning mt-2 mb-0 uc-flag-reason';
             badge.style.padding = '0.5rem 0.75rem';
             badge.innerHTML = `<small><strong><i class="fas fa-flag me-2"></i>Důvod označení:</strong> ${this._escapeHtml(flagInfo.summary)}</small>`;
             contentDiv.appendChild(badge);
@@ -466,11 +466,10 @@ class UnifiedChat {
             });
         });
 
-        if (scrollToFlagged) {
-            const flaggedEl = this.chatMessages.querySelector('.uc-flagged');
-            if (flaggedEl) {
-                flaggedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
+        const flaggedEl = this.chatMessages.querySelector('.uc-flag-reason');
+        
+        if (scrollToFlagged && flaggedEl) {
+            flaggedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else {
             this.scrollToBottom();
         }
@@ -645,7 +644,9 @@ class UnifiedChat {
                 this._clearStreamingBubble();
                 this.addSystemMessage('⚠️ ' + data.message);
                 this.setInputEnabled(false);
+                this.disconnect();
                 if (this.onLimitReached) this.onLimitReached(data);
+                if (this.onDisconnected) this.onDisconnected("limit_reached");
                 break;
 
             case 'error':

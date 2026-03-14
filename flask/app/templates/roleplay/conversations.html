@@ -153,6 +153,7 @@
         // ── Session data from the server ─────────────────────
         const sessionsData = {{ sessions_data|tojson|safe }};
         let currentSessionId = null;
+        let limitReached = false;
 
         // ── Initialise the unified chat component ────────────
         const chat = new UnifiedChat({
@@ -196,6 +197,51 @@
                 $('#flagId').val(flagInfo.id);
                 $('#flagIsPublic').prop('checked', flagInfo.is_public || false);
                 $('#flagMessageModal').modal('show');
+            },
+            onDisconnect: function (event) {
+                if (!currentSessionId) return;
+                chat.addSystemMessage('⚠️ Byli jste odpojeni od chatu.');
+
+                if (event === "limit_reached" || limitReached) {
+                    limitReached = true;
+
+                    const continueFooter = document.createElement('div');
+                    continueFooter.className = 'chat-footer-continue';
+                    continueFooter.innerHTML = `
+                        <button class="btn btn-outline-alert btn-m" id="continue-in-new-btn" style="display: inline-flex; align-items: center;"
+                        title="Pokračovat v novém chatu">
+                        <i class="fas fa-play me-2"></i> Pokračovat v novém chatu
+                        </button>
+                    `;
+                    continueFooter.style.display = 'flex';
+                    continueFooter.style.justifyContent = 'center';
+                    continueFooter.style.padding = '20px';
+
+                    if (chat.chatFooter) {
+                        chat.chatFooter.style.display = 'none';
+                    }
+
+                    document.querySelector(".chat").appendChild(continueFooter);
+                    return;
+                }
+
+                const continueFooter = document.createElement('div');
+                continueFooter.className = 'chat-footer-continue';
+                continueFooter.innerHTML = `
+                    <button class="btn btn-outline-alert btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
+                    title="Pokračovat v konverzaci">
+                    <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
+                    </button>
+                `;
+                continueFooter.style.display = 'flex';
+                continueFooter.style.justifyContent = 'center';
+                continueFooter.style.padding = '20px';
+
+                if (chat.chatFooter) {
+                    chat.chatFooter.style.display = 'none';
+                }
+
+                document.querySelector(".chat").appendChild(continueFooter);
             }
         });
 
@@ -209,6 +255,7 @@
             const sessionId = $(this).data('session-id');
             currentSessionId = sessionId;
             chat.sessionId = sessionId;
+            limitReached = false;
 
             try {
                 updateQueryStringParam("conversationId", currentSessionId);
@@ -440,6 +487,32 @@
             setTimeout(() => {
                 $(`.conversation-item[data-session-id="${sessionId}"]`).trigger('click');
             }, 100);
+        }
+
+        async function resumeConversation(conversationId, rebuildFrontend) {
+            if (!conversationId) throw new Error("Chybí ID konverzace.");
+
+            const response = await fetch(`${FASTAPI_SOCKETIO_URL}/sessions/resume`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ conversation_id: conversationId }),
+            });
+
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.detail || payload.error || `Server error: ${response.status}`);
+            }
+
+            if (rebuildFrontend && Array.isArray(payload.conversation_history)) {
+                chat.loadHistory(payload.conversation_history);
+            }
+
+            currentSessionId = payload.conversation_id;
+
+            await chat.connect(payload.session_id);
+            chat.clearProcessingMessages();
+            chat.setInputEnabled(true);
+            if (chat.msgInput) chat.msgInput.focus();
         }
     });
 

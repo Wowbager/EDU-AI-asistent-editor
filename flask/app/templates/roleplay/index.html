@@ -250,6 +250,7 @@
     let currentSessionId = null;
     let currentRoleId = null;
     let currentFlagData = null;
+    let limitReached = false;
 
     // ── Initialise unified chat ──────────────────────────
     const chat = new UnifiedChat({
@@ -269,37 +270,91 @@
             $('#flagSummaryModal').modal('show');
         },
 
-        onDisconnected: function (_event) {
+        onDisconnected: function (event) {
             if (!currentSessionId) return;
             chat.addSystemMessage('⚠️ Byli jste odpojeni od chatu.');
 
-            // Offer reconnect
-            const wrapper = document.createElement('div');
-            wrapper.className = 'alert alert-warning d-flex align-items-center justify-content-between reconnect-notice';
-            const span = document.createElement('span');
-            span.textContent = 'Pokračovat v konverzaci můžete tlačítkem níže.';
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'btn btn-sm btn-outline-primary ms-2';
-            btn.textContent = 'Znovu připojit';
-            btn.addEventListener('click', async () => {
-                btn.disabled = true;
-                btn.textContent = 'Připojuji...';
-                try {
-                    await resumeConversation(currentSessionId, false);
-                } catch (err) {
-                    chat.addSystemMessage(`Nepodařilo se obnovit chat: ${err.message}`);
-                    btn.disabled = false;
-                    btn.textContent = 'Znovu připojit';
+            if (event === "limit_reached" || limitReached) {
+                limitReached = true;
+
+                const continueFooter = document.createElement('div');
+                continueFooter.className = 'chat-footer-continue';
+                continueFooter.innerHTML = `
+                    <button class="btn btn-outline-alert btn-m" id="continue-in-new-btn" style="display: inline-flex; align-items: center;"
+                    title="Pokračovat v novém chatu">
+                    <i class="fas fa-play me-2"></i> Pokračovat v novém chatu
+                    </button>
+                `;
+                continueFooter.style.display = 'flex';
+                continueFooter.style.justifyContent = 'center';
+                continueFooter.style.padding = '20px';
+
+                if (chat.chatFooter) {
+                    chat.chatFooter.style.display = 'none';
                 }
-            });
-            wrapper.appendChild(span);
-            wrapper.appendChild(btn);
-            if (chat.chatMessages) {
-                chat.chatMessages.appendChild(wrapper);
-                chat.scrollToBottom();
+
+                document.querySelector(".chat").appendChild(continueFooter);
+                return;
             }
+
+            const continueFooter = document.createElement('div');
+            continueFooter.className = 'chat-footer-continue';
+            continueFooter.innerHTML = `
+                <button class="btn btn-outline-alert btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
+                title="Pokračovat v konverzaci">
+                <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
+                </button>
+            `;
+            continueFooter.style.display = 'flex';
+            continueFooter.style.justifyContent = 'center';
+            continueFooter.style.padding = '20px';
+
+            if (chat.chatFooter) {
+                chat.chatFooter.style.display = 'none';
+            }
+
+            document.querySelector(".chat").appendChild(continueFooter);
         }
+    });
+
+    $(document).on('click', '#continue-in-new-btn', async function () {
+        const btn = document.getElementById('continue-conversation-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Připojuji...';
+
+        resumeConversation(currentSessionId, true).then(() => {
+            btn.innerHTML = '<i class="fas fa-check me-2"></i> Připojeno';
+            btn.className = 'btn btn-success btn-sm ml-auto';
+
+            $(".chat-footer-continue").remove();
+            if (chat.chatFooter) {
+            chat.chatFooter.style.display = 'block';
+        }
+        }).catch((error) => {
+            chat.addSystemMessage(`Nepodařilo se obnovit konverzaci: ${error.message}`);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-play me-2"></i> Pokračovat v konverzaci';
+        });
+    });
+
+    $(document).on('click', '#continue-conversation-btn', async function () {
+        const btn = document.getElementById('continue-conversation-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Připojuji...';
+
+        startCustomChat().then(() => {
+            btn.innerHTML = '<i class="fas fa-check me-2"></i> Připojeno';
+            btn.className = 'btn btn-success btn-sm ml-auto';
+
+            $(".chat-footer-continue").remove();
+            if (chat.chatFooter) {
+            chat.chatFooter.style.display = 'block';
+        }
+        }).catch((error) => {
+            chat.addSystemMessage(`Nepodařilo se obnovit konverzaci: ${error.message}`);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-play me-2"></i> Pokračovat v konverzaci';
+        });
     });
 
     // ── Chat header helper ───────────────────────────────
