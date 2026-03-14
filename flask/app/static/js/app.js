@@ -2407,3 +2407,15 @@ function open_all_steps() {
 $(document).ready(function () {
     open_all_steps();
 });
+
+function updateQueryStringParam(key, value) {
+  const url = new URL(window.location);
+  url.searchParams.set(key, value);
+  window.history.replaceState({}, '', url);
+}
+
+function clearQueryStringParams() {
+  const url = new URL(window.location);
+    url.searchParams.forEach((v, k) => url.searchParams.delete(k, v));
+  window.history.replaceState({}, '', url);
+}

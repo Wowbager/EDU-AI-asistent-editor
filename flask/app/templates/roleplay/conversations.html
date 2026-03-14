@@ -210,6 +210,10 @@
             currentSessionId = sessionId;
             chat.sessionId = sessionId;
 
+            try {
+                updateQueryStringParam("conversationId", currentSessionId);
+            } catch {}
+
             // Disconnect any previous live session
             chat.disconnect();
             $(".chat-footer-continue").remove();
@@ -317,6 +321,8 @@
                 $('body').removeClass('navigation-open');
             }
             $(".chat-footer-continue").remove();
+
+            clearQueryStringParams();
         });
 
         // ── Search ───────────────────────────────────────────
@@ -411,7 +417,18 @@
                 $(`.conversation-item[data-session-id="${selectedSessionId}"]`).trigger('click');
             }, 100);
         }
+
+        const query = new URLSearchParams(window.location.search);
+        
+        const sessionId = query.get("conversationId");
+        
+        if (sessionId) {
+            setTimeout(() => {
+                $(`.conversation-item[data-session-id="${sessionId}"]`).trigger('click');
+            }, 100);
+        }
     });
+
 </script>
 
 <style>

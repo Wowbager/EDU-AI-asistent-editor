@@ -53,7 +53,7 @@ content %}
                         />
                     </form>
 
-                    <div class="sidebar-body scroller">
+                    <div class="sidebar-body">
                         <ul class="list-group list-group-flush" id="teams-list">
                             <!-- Pending Invites Section -->
                             {% if pending_invitations_count > 0 %}
@@ -700,6 +700,8 @@ content %}
 </body>
 
 <script>
+    console.log("aaaaa")
+
     // Team data storage
     let teamsData = {
         userTeams: {{ user_teams_json|tojson|safe }},
@@ -754,6 +756,10 @@ content %}
             console.error('Team not found:', teamId);
             return;
         }
+
+        try {
+            updateQueryStringParam("teamId", selectedTeamId);
+        } catch {}
 
         // Hide no-team-selected, show team-details
         noTeamSelected.style.display = 'none';
@@ -903,6 +909,16 @@ content %}
     document.getElementById('back2teams')?.addEventListener('click', function() {
         $('.chat').removeClass('open');
         document.querySelectorAll('.list-group-item').forEach(item => item.classList.remove('active'));
+
+        noTeamSelected.style.display = "block";
+        teamDetails.style.display = "none";
+
+        teamTitle.innerText = "Vyberte tým";
+        teamSubtitle.innerText = "Klikněte na tým v levém panelu pro zobrazení detailů"
+
+        document.querySelector("#team-actions").innerHTML = "";
+
+        clearQueryStringParams();
     });
 
     // ================== TEAM MANAGEMENT FUNCTIONS ==================
@@ -1375,6 +1391,15 @@ content %}
 
         invitesList.innerHTML = html;
     }
+
+
+    const query = new URLSearchParams(window.location.search);
+    
+    const teamId = query.get("teamId");
+    
+    if (teamId) {
+        selectTeam(+teamId);
+    }
 </script>
 
 <style>
@@ -1416,6 +1441,10 @@ content %}
         justify-content: center;
         align-items: center;
         min-height: 60vh;
+    }
+
+    .list-group-item.active {
+        z-index: 0 !important;
     }
 </style>
 
