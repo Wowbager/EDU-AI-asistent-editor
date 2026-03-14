@@ -283,7 +283,7 @@
                 const continueFooter = document.createElement('div');
                 continueFooter.className = 'chat-footer-continue';
                 continueFooter.innerHTML = `
-                    <button class="btn btn-outline-alert btn-m" id="continue-in-new-btn" style="display: inline-flex; align-items: center;"
+                    <button class="btn btn-outline-light btn-m" id="continue-in-new-btn" style="display: inline-flex; align-items: center;"
                     title="Pokračovat v novém chatu">
                     <i class="fas fa-play me-2"></i> Pokračovat v novém chatu
                     </button>
@@ -303,7 +303,7 @@
             const continueFooter = document.createElement('div');
             continueFooter.className = 'chat-footer-continue';
             continueFooter.innerHTML = `
-                <button class="btn btn-outline-alert btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
+                <button class="btn btn-outline-light btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
                 title="Pokračovat v konverzaci">
                 <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
                 </button>
@@ -325,7 +325,7 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Připojuji...';
 
-        resumeConversation(currentSessionId, true).then(() => {
+        startCustomChat().then(() => {
             btn.innerHTML = '<i class="fas fa-check me-2"></i> Připojeno';
             btn.className = 'btn btn-success btn-sm ml-auto';
 
@@ -345,7 +345,7 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Připojuji...';
 
-        startCustomChat().then(() => {
+        resumeConversation(currentSessionId, true).then(() => {
             btn.innerHTML = '<i class="fas fa-check me-2"></i> Připojeno';
             btn.className = 'btn btn-success btn-sm ml-auto';
 

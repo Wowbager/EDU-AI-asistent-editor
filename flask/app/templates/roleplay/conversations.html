@@ -198,7 +198,9 @@
                 $('#flagIsPublic').prop('checked', flagInfo.is_public || false);
                 $('#flagMessageModal').modal('show');
             },
-            onDisconnect: function (event) {
+            onDisconnected: function (event) {
+                console.warn('Chat disconnected:', event);
+                if (!currentSessionId) return;
                 chat.addSystemMessage('⚠️ Byli jste odpojeni od chatu.');
 
                 if (event === "limit_reached" || limitReached) {
@@ -207,9 +209,9 @@
                     const continueFooter = document.createElement('div');
                     continueFooter.className = 'chat-footer-continue';
                     continueFooter.innerHTML = `
-                        <button class="btn btn-outline-alert btn-m" id="continue-in-new-btn" style="display: inline-flex; align-items: center;"
-                        title="Pokračovat v novém chatu">
-                        <i class="fas fa-play me-2"></i> Pokračovat v novém chatu
+                        <button class="btn btn-outline-light btn-m" id="continue-in-new-btn" style="display: inline-flex; align-items: center;"
+                        title="Pokračovat v novém chatu" disabled>
+                        <i class="fas fa-play me-2"></i> Není k dispozici
                         </button>
                     `;
                     continueFooter.style.display = 'flex';
@@ -227,7 +229,7 @@
                 const continueFooter = document.createElement('div');
                 continueFooter.className = 'chat-footer-continue';
                 continueFooter.innerHTML = `
-                    <button class="btn btn-outline-alert btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
+                    <button class="btn btn-outline-light btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
                     title="Pokračovat v konverzaci">
                     <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
                     </button>
@@ -350,6 +352,10 @@
                 });
                 const payload = await response.json();
                 if (!response.ok) throw new Error(payload.detail || payload.error || `Server error: ${response.status}`);
+
+                if (Array.isArray(payload.conversation_history)) {
+                    chat.loadHistory(payload.conversation_history);
+                }
 
                 await chat.connect(payload.session_id);
                 chat.enableLiveMode();
@@ -486,32 +492,6 @@
             setTimeout(() => {
                 $(`.conversation-item[data-session-id="${sessionId}"]`).trigger('click');
             }, 100);
-        }
-
-        async function resumeConversation(conversationId, rebuildFrontend) {
-            if (!conversationId) throw new Error("Chybí ID konverzace.");
-
-            const response = await fetch(`${FASTAPI_SOCKETIO_URL}/sessions/resume`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ conversation_id: conversationId }),
-            });
-
-            const payload = await response.json();
-            if (!response.ok) {
-                throw new Error(payload.detail || payload.error || `Server error: ${response.status}`);
-            }
-
-            if (rebuildFrontend && Array.isArray(payload.conversation_history)) {
-                chat.loadHistory(payload.conversation_history);
-            }
-
-            currentSessionId = payload.conversation_id;
-
-            await chat.connect(payload.session_id);
-            chat.clearProcessingMessages();
-            chat.setInputEnabled(true);
-            if (chat.msgInput) chat.msgInput.focus();
         }
     });
 
