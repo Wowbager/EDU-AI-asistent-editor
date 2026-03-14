@@ -271,6 +271,7 @@
                 flaggedMessages:   sessionData.flagged_messages   || [],
                 isPublic:          sessionData.is_public          || false,
                 isPostedByUser:    sessionData.is_posted_by_user || false,
+                scrollToFlagged:   sessionData.flagged_messages && sessionData.flagged_messages.length > 0
             });
 
             chat.readOnly = !sessionData.is_posted_by_user;

@@ -419,7 +419,8 @@ def conversations():
             'message_count': len(chat_history),
             'chat_history': chat_history,
             'flagged_messages': [{'id': f.id, 'content': f.content, 'summary': f.summary, 'is_public': f.is_public, 'team_id': f.team_id} for f in flagged_messages],
-            'flagged_content_set': flagged_content_list
+            'flagged_content_set': flagged_content_list,
+            'is_posted_by_user': session.user_id == current_user.id if session else False
         })
     
     return render_template(
