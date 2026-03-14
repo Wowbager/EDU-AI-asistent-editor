@@ -339,12 +339,17 @@ class UnifiedChat {
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
 
-        const p = document.createElement('p');
+        /* const p = document.createElement('p');
         p.style.whiteSpace = 'pre-wrap';
         p.style.wordBreak = 'break-word';
         p.style.marginBottom = '0';
         p.textContent = content;
-        contentDiv.appendChild(p);
+        contentDiv.appendChild(p); */
+
+        const htmlContent = marked.parse(content);
+        const sanitizedContent = DOMPurify.sanitize(htmlContent);
+
+        contentDiv.innerHTML = sanitizedContent;
 
         // Public flag reason badge
         if (isPublic && flagInfo && flagInfo.summary) {
