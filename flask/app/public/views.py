@@ -35,7 +35,7 @@ hasher = Hashids("7qsnqSGiOlZdQOUQzXrM")
 def index():
     return redirect(url_for("public.login"))
 
-
+'''
 @public.route("/course/<hash>")
 def share_webchat(hash):
     try: 
@@ -129,10 +129,10 @@ def share_webchat(hash):
     </style>
     <!-- Removed the old window.onload script block -->
     """
+'''
 
-
-@public.route("/dev/test/webchat/<hash>")
-def dev_test_webchat(hash):
+@public.route("/course/<hash>")
+def share_webchat(hash):
     try: 
         course_id = hasher.decode(hash)[0]
         course = Course.query.filter_by(id=course_id).first()
@@ -155,7 +155,7 @@ def dev_test_webchat(hash):
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>Rasa Webchat Test - {course.name} (ID: {course_id})</title>
+    <title>{course.name} (ID: {course_id})</title>
   </head>
   <body>
     <script>

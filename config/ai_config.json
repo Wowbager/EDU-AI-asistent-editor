@@ -1,8 +1,8 @@
 {
   "chat_model": "openai/gpt-5.1",
-  "role_generation_model": "groq/meta-llama/llama-4-maverick-17b-128e-instruct",
-  "role_name_generation_model": "groq/meta-llama/llama-4-maverick-17b-128e-instruct",
-  "role_prompt_model": "groq/meta-llama/llama-4-maverick-17b-128e-instruct",
+  "role_generation_model": "groq/meta-llama/llama-4-scout-17b-16e-instruct",
+  "role_name_generation_model": "groq/meta-llama/llama-4-scout-17b-16e-instruct",
+  "role_prompt_model": "groq/meta-llama/llama-4-scout-17b-16e-instruct",
   "role_name_count": 5,
   "chat_temperature": 0.7,
   "chat_max_tokens": 500,
