@@ -199,7 +199,6 @@
                 $('#flagMessageModal').modal('show');
             },
             onDisconnect: function (event) {
-                if (!currentSessionId) return;
                 chat.addSystemMessage('⚠️ Byli jste odpojeni od chatu.');
 
                 if (event === "limit_reached" || limitReached) {
