@@ -700,8 +700,6 @@ content %}
 </body>
 
 <script>
-    console.log("aaaaa")
-
     // Team data storage
     let teamsData = {
         userTeams: {{ user_teams_json|tojson|safe }},
@@ -1398,7 +1396,9 @@ content %}
     const teamId = query.get("teamId");
     
     if (teamId) {
-        selectTeam(+teamId);
+        setTimeout(() => {
+                $(`.team-item[data-team-id="${teamId}"]`).trigger('click');
+            }, 100);
     }
 </script>
 

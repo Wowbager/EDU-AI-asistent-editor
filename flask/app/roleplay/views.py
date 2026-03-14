@@ -275,10 +275,10 @@ def conversations():
             team = Team.query.get(data['team_id']) if data['team_id'] else None
             
             # Extract role info
-            role_title = "Konverzace"
-            role_brief = ""
+            role_title = data["role_title"] or "Bez informací"
+            role_brief = data["role_brief"] or "Bez informací"
 
-            if chat_history and len(chat_history) > 0:
+            """ if chat_history and len(chat_history) > 0:
                 for first_msg in chat_history:
                     if first_msg.get('role') == 'system':
                         content = first_msg.get('content', '')
@@ -291,7 +291,7 @@ def conversations():
                             if match:
                                 role_title = match.group(1)
                                 role_brief = match.group(2)
-                    break
+                    break """
             
             # Create flagged content list with summaries
             flagged_messages_list = []
@@ -377,10 +377,10 @@ def conversations():
         flagged_content_list = [f.content for f in flagged_messages]
         
         # Extract role title and brief from chat history or use defaults
-        role_title = (session.role_title or "").strip() or "Konverzace"
-        role_brief = ""
+        role_title = session.role_title or "Bez informací"
+        role_brief = session.role_brief or "Bez informací"
         
-        if role_title == "Konverzace" and chat_history and len(chat_history) > 0:
+        """ if role_title == "Konverzace" and chat_history and len(chat_history) > 0:
             for first_msg in chat_history:
                 if first_msg.get('role') == 'system':
                     content = first_msg.get('content', '')
@@ -396,7 +396,7 @@ def conversations():
                         if match:
                             role_title = match.group(1)
                             role_brief = match.group(2)
-                break
+                break """
 
         problem_description = "Zatím nenachytány žádné podezřelé odpovědi."
         if flagged_messages:
