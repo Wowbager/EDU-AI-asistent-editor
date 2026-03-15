@@ -428,7 +428,8 @@ def conversations():
         sessions_data=sessions_data,
         pagination=pagination,
         show_flagged_only=show_flagged_only,
-        user_teams=current_user.teams
+        user_teams=current_user.teams,
+        max_ai_responses=MAX_AI_RESPONSES
     )
 
 @roleplay.route("/teams", methods=["GET"])

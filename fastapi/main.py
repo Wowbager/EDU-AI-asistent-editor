@@ -124,12 +124,16 @@ async def connect(sid, environ, auth):
         logger.warning("Socket.IO session rejected, invalid bootstrap session: %s", session_id)
         raise ConnectionRefusedError("Invalid or expired session")
 
+    assistant_message_count = sum(
+        1 for m in session.messages if m.get("role") == "assistant"
+    )
+
     connection_states[sid] = {
         "session_id": session_id,
         "user_id": session.user_id,
         "role_id": session.role_id,
         "messages": session.messages,
-        "assistant_message_count": 0,
+        "assistant_message_count": assistant_message_count,
     }
 
     await sio.emit(
@@ -138,6 +142,17 @@ async def connect(sid, environ, auth):
         to=sid,
     )
     logger.info("Socket.IO client connected sid=%s session_id=%s", sid, session_id)
+
+    if assistant_message_count >= MAX_ASSISTANT_RESPONSES:
+        await sio.emit(
+            "limit_reached",
+            {
+                "type": "limit_reached",
+                "message": f"Dosažen limit {MAX_ASSISTANT_RESPONSES} odpovědí AI",
+            },
+            to=sid,
+        )
+        await sio.disconnect(sid)
 
 
 @sio.on("send_message")

@@ -152,6 +152,7 @@
 
         // ── Session data from the server ─────────────────────
         const sessionsData = {{ sessions_data|tojson|safe }};
+        const MAX_AI_RESPONSES = {{ max_ai_responses }};
         let currentSessionId = null;
         let limitReached = false;
 
@@ -209,10 +210,12 @@
                     const continueFooter = document.createElement('div');
                     continueFooter.className = 'chat-footer-continue';
                     continueFooter.innerHTML = `
-                        <button class="btn btn-outline-light btn-m" id="continue-in-new-btn" style="display: inline-flex; align-items: center;"
-                        title="Pokračovat v novém chatu" disabled>
-                        <i class="fas fa-play me-2"></i> Není k dispozici
-                        </button>
+                        <div class="text-center">
+                            <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
+                                <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
+                            </button>
+                            <p class="text-muted small mt-2 mb-0">Tato konverzace dosáhla maximálního počtu odpovědí AI.</p>
+                        </div>
                     `;
                     continueFooter.style.display = 'flex';
                     continueFooter.style.justifyContent = 'center';
@@ -293,15 +296,28 @@
                 </div>
             `);
 
+            const assistantCount = (sessionData.chat_history || []).filter(m => m.role === 'assistant').length;
+
             const continueFooter = document.createElement('div');
             continueFooter.className = 'chat-footer-continue';
             if (sessionData.is_posted_by_user) {
-                continueFooter.innerHTML = `
-                    <button class="btn btn-outline-light btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
-                    title="Pokračovat v konverzaci">
-                    <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
-                    </button>
-                `;
+                if (assistantCount >= MAX_AI_RESPONSES) {
+                    continueFooter.innerHTML = `
+                        <div class="text-center">
+                            <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
+                                <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
+                            </button>
+                            <p class="text-muted small mt-2 mb-0">Tato konverzace dosáhla maximálního počtu odpovědí AI.</p>
+                        </div>
+                    `;
+                } else {
+                    continueFooter.innerHTML = `
+                        <button class="btn btn-outline-light btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
+                        title="Pokračovat v konverzaci">
+                        <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
+                        </button>
+                    `;
+                }
             } else {
                 continueFooter.innerHTML = `
                     <div class="alert alert-info mb-0" role="alert">
@@ -332,8 +348,8 @@
 
             document.querySelector(".chat").appendChild(continueFooter);
 
-            // Auto-reconnect conversation
-            if (sessionData.is_posted_by_user) {
+            // Auto-reconnect conversation (only if limit not yet reached)
+            if (sessionData.is_posted_by_user && assistantCount < MAX_AI_RESPONSES) {
                 $(`#continue-conversation-btn`).trigger('click');
             }
         });
