@@ -396,7 +396,8 @@ def conversations():
             pagination=None,
             show_flagged_only=False,
             show_public_flags=True,
-            user_teams=current_user.teams if current_user.is_authenticated else []
+            user_teams=current_user.teams if current_user.is_authenticated else [],
+            max_ai_responses=MAX_AI_RESPONSES
         )
     
     # Get all chat sessions for the current user, ordered by most recent

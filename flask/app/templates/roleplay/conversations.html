@@ -349,11 +349,24 @@
                     `;
                 }
             } else {
-                continueFooter.innerHTML = `
-                    <div class="alert alert-info mb-0" role="alert">
-                        Tato konverzace je pouze pro čtení.
-                    </div>
-                `;
+                if (sessionData.is_public) {
+                    continueFooter.innerHTML = `
+                        <div class="text-center">
+                            <div class="alert alert-info mb-2" role="alert">
+                                Tato konverzace je pouze pro čtení.
+                            </div>
+                            <button class="btn btn-outline-light btn-m" id="reuse-in-index-btn" style="display: inline-flex; align-items: center;">
+                                <i class="fas fa-plus me-2"></i> Nový chat se stejnými instrukcemi
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    continueFooter.innerHTML = `
+                        <div class="alert alert-info mb-0" role="alert">
+                            Tato konverzace je pouze pro čtení.
+                        </div>
+                    `;
+                }
             }
             continueFooter.style.display = 'flex';
             continueFooter.style.justifyContent = 'center';
