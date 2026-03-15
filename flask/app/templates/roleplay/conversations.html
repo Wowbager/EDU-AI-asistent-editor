@@ -47,7 +47,7 @@
                                         </span>
                                     </figure>
                                     <div class="users-list-body">
-                                        <h5>{{ (session_data.session.role_title or 'Konverzace').replace('Role ', '') }}</h5>
+                                        <h5>{{ (session_data.session.display_role_title or session_data.session.role_title or 'Konverzace').replace('Role ', '') }}</h5>
                                         <div class="users-list-action">
                                             <small class="text-muted">
                                                 {% if session_data.session.created_at %}
@@ -153,6 +153,7 @@
         // ── Session data from the server ─────────────────────
         const sessionsData = {{ sessions_data|tojson|safe }};
         const MAX_AI_RESPONSES = {{ max_ai_responses }};
+        const ROLEPLAY_HOME_URL = "{{ url_for('roleplay.roleplay_home') }}";
         let currentSessionId = null;
         let limitReached = false;
 
@@ -206,17 +207,33 @@
 
                 if (event === "limit_reached" || limitReached) {
                     limitReached = true;
+                    const currentSessionData = sessionsData.find(s => s.session.id === currentSessionId);
+                    const canReuseInstructions = !!(currentSessionData && (currentSessionData.is_posted_by_user || currentSessionData.is_public));
 
                     const continueFooter = document.createElement('div');
                     continueFooter.className = 'chat-footer-continue';
-                    continueFooter.innerHTML = `
-                        <div class="text-center">
-                            <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
-                                <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
-                            </button>
-                            <p class="text-muted small mt-2 mb-0">Tato konverzace dosáhla maximálního počtu odpovědí AI.</p>
-                        </div>
-                    `;
+                    if (canReuseInstructions) {
+                        continueFooter.innerHTML = `
+                            <div class="text-center">
+                                <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
+                                    <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
+                                </button>
+                                <p class="text-muted small mt-2 mb-2">Tato konverzace dosáhla maximálního počtu odpovědí AI.</p>
+                                <button class="btn btn-outline-light btn-m" id="reuse-in-index-btn" style="display: inline-flex; align-items: center;">
+                                    <i class="fas fa-plus me-2"></i> Nový chat se stejnými instrukcemi
+                                </button>
+                            </div>
+                        `;
+                    } else {
+                        continueFooter.innerHTML = `
+                            <div class="text-center">
+                                <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
+                                    <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
+                                </button>
+                                <p class="text-muted small mt-2 mb-0">Tato konverzace dosáhla maximálního počtu odpovědí AI.</p>
+                            </div>
+                        `;
+                    }
                     continueFooter.style.display = 'flex';
                     continueFooter.style.justifyContent = 'center';
                     continueFooter.style.padding = '20px';
@@ -277,7 +294,7 @@
             $(this).addClass('open-chat');
 
             // Build header with Continue button
-            const title = (sessionData.session.role_title || 'Konverzace').replace('Role ', '');
+            const title = (sessionData.session.display_role_title || sessionData.session.role_title || 'Konverzace').replace('Role ', '');
             const problem = sessionData.session.problem_description || '';
             chat.setHeader(`
                 <div class="chat-header-user">
@@ -297,10 +314,23 @@
             `);
 
             const assistantCount = (sessionData.chat_history || []).filter(m => m.role === 'assistant').length;
+            const canReuseInstructions = !!(sessionData.is_posted_by_user || sessionData.is_public);
 
             const continueFooter = document.createElement('div');
             continueFooter.className = 'chat-footer-continue';
-            if (sessionData.is_posted_by_user) {
+            if (assistantCount >= MAX_AI_RESPONSES && canReuseInstructions) {
+                continueFooter.innerHTML = `
+                    <div class="text-center">
+                        <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
+                            <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
+                        </button>
+                        <p class="text-muted small mt-2 mb-2">Tato konverzace dosáhla maximálního počtu odpovědí AI.</p>
+                        <button class="btn btn-outline-light btn-m" id="reuse-in-index-btn" style="display: inline-flex; align-items: center;">
+                            <i class="fas fa-plus me-2"></i> Nový chat se stejnými instrukcemi
+                        </button>
+                    </div>
+                `;
+            } else if (sessionData.is_posted_by_user) {
                 if (assistantCount >= MAX_AI_RESPONSES) {
                     continueFooter.innerHTML = `
                         <div class="text-center">
@@ -388,6 +418,11 @@
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-play me-2"></i> Pokračovat v konverzaci';
             }
+        });
+
+        $(document).on('click', '#reuse-in-index-btn', function () {
+            if (!currentSessionId) return;
+            window.location.href = `${ROLEPLAY_HOME_URL}?reuse_from_session_id=${encodeURIComponent(currentSessionId)}`;
         });
 
         // ── Back button ──────────────────────────────────────

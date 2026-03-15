@@ -248,6 +248,7 @@
             window.location.hostname === "127.0.0.1")
             ? "http://localhost:6767"
             : "https://api.edu-ai.eu");
+    const reuseSource = {{ reuse_source|tojson|safe }};
 
     // ── Global state ─────────────────────────────────────
     let currentSessionId = null;
@@ -630,6 +631,24 @@
         }
     }
 
+    // ── Start a fresh chat from server-validated reuse source ──
+    async function startChatFromReuseSource() {
+        if (!reuseSource) return;
+
+        const roleTitle = (reuseSource.role_title || "Pokračování konverzace").trim();
+        const roleBrief = (reuseSource.role_brief || "").trim();
+        const instructions = (reuseSource.instructions || "Pokračování konverzace.").trim();
+
+        if (customRoleName) customRoleName.value = roleTitle;
+        if (customRoleBrief) customRoleBrief.value = roleBrief;
+        if (customInstructions) {
+            customInstructions.value = instructions;
+            customInstructions.dispatchEvent(new Event("input"));
+        }
+
+        await startCustomChat();
+    }
+
     // ── Reset to role selection ──────────────────────────
     function resetToRoleSelection() {
         chat.disconnect();
@@ -691,8 +710,12 @@
         }
     }
 
-    // ── Auto-continue if URL parameter present ───────────
-    continueConversationFromUrl();
+    // ── URL bootstrap: reuse source takes precedence ─────
+    if (reuseSource) {
+        startChatFromReuseSource();
+    } else {
+        continueConversationFromUrl();
+    }
 
     // ── Flag summary modal logic ─────────────────────────
     const flagSummaryInput = document.getElementById("flag-summary-input");

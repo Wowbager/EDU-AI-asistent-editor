@@ -53,7 +53,68 @@ def roleplay_home():
         return redirect(url_for("public.index"))
     
     user_teams = current_user.teams  # Get user's teams
-    return render_template("roleplay/index.html", user_teams=user_teams)
+    reuse_source = None
+    reuse_from_session_id = (request.args.get("reuse_from_session_id") or "").strip()
+
+    if reuse_from_session_id:
+        source_session = ChatSession.query.get(reuse_from_session_id)
+        has_public_flag = FlaggedResponse.query.filter_by(
+            session_id=reuse_from_session_id,
+            is_public=True,
+        ).first() is not None
+        can_reuse_source = bool(
+            source_session and (
+                source_session.user_id == current_user.id or has_public_flag
+            )
+        )
+
+        if can_reuse_source:
+            source_messages = ChatMessage.query.filter_by(
+                session_id=source_session.id
+            ).order_by(ChatMessage.message_index.asc()).all()
+
+            role_title = (source_session.role_title or "").strip() or "Konverzace"
+            role_brief = ""
+            first_user_message = ""
+
+            for message in source_messages:
+                if not first_user_message and message.role == "user" and message.content:
+                    first_user_message = str(message.content).strip()
+
+                if message.role == "system" and message.content:
+                    content = str(message.content)
+                    if "v roli" in content:
+                        match = re.search(r"v roli '([^']+)'", content)
+                        if match:
+                            role_title = match.group(1)
+
+                        match = re.search(r"'([^']+)' \(([^)]+)\)", content)
+                        if match:
+                            role_title = match.group(1)
+                            role_brief = match.group(2)
+                    break
+
+            instructions = (
+                first_user_message[:MAX_CUSTOM_INSTRUCTIONS_LENGTH]
+                if first_user_message
+                else "Pokračování konverzace."
+            )
+
+            reuse_source = {
+                "session_id": source_session.id,
+                "role_id": source_session.role_id,
+                "role_title": role_title,
+                "role_brief": role_brief,
+                "instructions": instructions,
+            }
+        else:
+            flash("Tuto konverzaci nelze použít pro opětovné zahájení.", "warning")
+
+    return render_template(
+        "roleplay/index.html",
+        user_teams=user_teams,
+        reuse_source=reuse_source,
+    )
 
 @roleplay.route("/roles", methods=["GET"])
 @login_required
@@ -358,6 +419,19 @@ def conversations():
     # Paginate the results
     pagination = sessions_query.paginate(page=page, per_page=per_page, error_out=False)
     sessions = pagination.items
+
+    all_user_sessions = ChatSession.query.filter_by(user_id=current_user.id).order_by(
+        ChatSession.created_at.asc(),
+        ChatSession.id.asc(),
+    ).all()
+    title_totals = {}
+    title_sequence_by_id = {}
+    title_running_counts = {}
+    for user_session in all_user_sessions:
+        base_title = (user_session.role_title or "").strip() or "Konverzace"
+        title_totals[base_title] = title_totals.get(base_title, 0) + 1
+        title_running_counts[base_title] = title_running_counts.get(base_title, 0) + 1
+        title_sequence_by_id[user_session.id] = title_running_counts[base_title]
     
     # For each session, get the message count and chat history
     sessions_data = []
@@ -407,11 +481,16 @@ def conversations():
                 if f.summary:
                     problem_description = f.summary
                     break
+
+        display_role_title = role_title
+        if title_totals.get(role_title, 0) > 1:
+            display_role_title = f"{role_title} #{title_sequence_by_id.get(session.id, 1)}"
         
         sessions_data.append({
             'session': {
                 'id': session.id,
                 'role_title': role_title,
+                'display_role_title': display_role_title,
                 'role_brief': role_brief,
                 'created_at': session.created_at.isoformat() if session.created_at else None,
                 'problem_description': problem_description
