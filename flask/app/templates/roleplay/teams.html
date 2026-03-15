@@ -132,7 +132,7 @@ content %}
                                     </div>
                                     <div class="users-list-action">
                                         <small class="text-muted">
-                                            {{ team.members.count() }} členů
+                                            {{ team.member_count if team.member_count is defined else team.members.count() }} členů
                                         </small>
                                     </div>
                                 </div>
@@ -176,7 +176,7 @@ content %}
                                     </div>
                                     <div class="users-list-action">
                                         <small class="text-muted">
-                                            {{ team.members.count() }} členů
+                                            {{ team.member_count if team.member_count is defined else team.members.count() }} členů
                                         </small>
                                     </div>
                                 </div>

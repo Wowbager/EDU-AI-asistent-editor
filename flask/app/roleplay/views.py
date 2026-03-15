@@ -6,9 +6,11 @@ import re
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash
 from flask_login import current_user, login_required
 from app import app, db
-from app.models import ChatSession, FlaggedResponse, Team, User, ChatMessage, TeamInvitation
+from app.models import ChatSession, FlaggedResponse, Team, User, ChatMessage, TeamInvitation, team_membership
 from datetime import datetime, timedelta
 import openai
+from sqlalchemy.orm import joinedload
+from sqlalchemy import func
 
 # Import utility functions and config from within roleplay module
 from .chat_utils import (
@@ -288,16 +290,12 @@ def conversations():
     Display all user's chat conversations with the ability to view details and flag/unflag messages.
     
     Query Parameters:
-        page: The page number (default: 1)
-        per_page: Number of items per page (default: 20)
         show_flagged_only: If 'true', show only conversations with flagged messages (default: 'false')
         show_public_flags: If 'true', show all publicly flagged conversations (default: 'false')
     
     Returns:
         The rendered conversations template
     """
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
     show_flagged_only = request.args.get('show_flagged_only', 'false').lower() == 'true'
     show_public_flags = request.args.get('show_public_flags', 'false').lower() == 'true'
     
@@ -307,46 +305,69 @@ def conversations():
     
     # If showing public flags, get all public flagged conversations (not just current user's)
     if show_public_flags:
-        # Get all public flagged messages with their session IDs
-        public_flags = FlaggedResponse.query.filter_by(is_public=True).order_by(FlaggedResponse.timestamp.desc()).all()
-        
-        # Group by session_id
+        public_flags = FlaggedResponse.query.filter_by(
+            is_public=True
+        ).order_by(FlaggedResponse.timestamp.desc()).all()
+
         sessions_dict = {}
         for flag in public_flags:
             if flag.session_id not in sessions_dict:
                 sessions_dict[flag.session_id] = {
                     'session_id': flag.session_id,
                     'flags': [],
-                    'team_id': flag.team_id
+                    'team_id': flag.team_id,
                 }
             sessions_dict[flag.session_id]['flags'].append(flag)
-        
-        # Build sessions data for public flags
+
+        session_ids = list(sessions_dict.keys())
+        sessions_by_id = {
+            s.id: s for s in ChatSession.query.filter(ChatSession.id.in_(session_ids)).all()
+        } if session_ids else {}
+
+        team_ids = [entry['team_id'] for entry in sessions_dict.values() if entry.get('team_id')]
+        teams_by_id = {
+            t.id: t for t in Team.query.filter(Team.id.in_(team_ids)).all()
+        } if team_ids else {}
+
+        chat_history_by_session = {}
+        missing_history_session_ids = []
+        for sid in session_ids:
+            history = get_chat_history(sid)
+            if history is None:
+                missing_history_session_ids.append(sid)
+            else:
+                chat_history_by_session[sid] = history
+
+        if missing_history_session_ids:
+            db_messages = ChatMessage.query.filter(
+                ChatMessage.session_id.in_(missing_history_session_ids)
+            ).order_by(ChatMessage.session_id.asc(), ChatMessage.message_index.asc()).all()
+
+            grouped_db_history = {sid: [] for sid in missing_history_session_ids}
+            for msg in db_messages:
+                grouped_db_history.setdefault(msg.session_id, []).append({
+                    'role': msg.role,
+                    'content': msg.content,
+                    'timestamp': msg.timestamp.isoformat() if msg.timestamp else None,
+                })
+
+            for sid in missing_history_session_ids:
+                chat_history_by_session[sid] = grouped_db_history.get(sid, [])
+
         sessions_data = []
         for session_id, data in sessions_dict.items():
-            # Get chat history
-            chat_history = get_chat_history(session_id)
-            session = ChatSession.query.get(session_id)
-            
-            
-            # If no Redis history, get from database
-            if not chat_history:
-                db_messages = ChatMessage.query.filter_by(session_id=session_id).order_by(ChatMessage.timestamp).all()
-                chat_history = [{'role': msg.role, 'content': msg.content, 'timestamp': msg.timestamp.isoformat() if msg.timestamp else None} for msg in db_messages]
-            
-            # Get team info
-            team = Team.query.get(data['team_id']) if data['team_id'] else None
-            
-            # Extract role info
-            role_title = (session.role_title or "").strip() or "Konverzace"
+            chat_history = chat_history_by_session.get(session_id, [])
+            session = sessions_by_id.get(session_id)
+            team = teams_by_id.get(data['team_id']) if data.get('team_id') else None
+
+            role_title = ((session.role_title if session else "") or "").strip() or "Konverzace"
             role_brief = ""
 
-            if role_title == "Konverzace" and chat_history and len(chat_history) > 0:
+            if role_title == "Konverzace" and chat_history:
                 for first_msg in chat_history:
                     if first_msg.get('role') == 'system':
                         content = first_msg.get('content', '')
                         if 'v roli' in content:
-                            import re
                             match = re.search(r"v roli '([^']+)'", content)
                             if match:
                                 role_title = match.group(1)
@@ -355,31 +376,30 @@ def conversations():
                                 role_title = match.group(1)
                                 role_brief = match.group(2)
                     break
-            
-            # Create flagged content list with summaries
-            flagged_messages_list = []
-            for f in data['flags']:
-                flagged_messages_list.append({
-                    'id': f.id,
-                    'content': f.content,
-                    'summary': f.summary,
-                    'timestamp': f.timestamp.isoformat() if f.timestamp else None
-                })
+
+            flagged_messages_list = [
+                {
+                    'id': flagged.id,
+                    'content': flagged.content,
+                    'summary': flagged.summary,
+                    'timestamp': flagged.timestamp.isoformat() if flagged.timestamp else None,
+                }
+                for flagged in data['flags']
+            ]
 
             problem_description = "Zatím nenachytány žádné podezřelé odpovědi."
-            if flagged_messages_list:
-                for f in flagged_messages_list:
-                    if f['summary']:
-                        problem_description = f['summary']
-                        break
-            
+            for flagged in flagged_messages_list:
+                if flagged['summary']:
+                    problem_description = flagged['summary']
+                    break
+
             sessions_data.append({
                 'session': {
                     'id': session_id,
                     'role_title': role_title,
                     'role_brief': role_brief,
                     'created_at': data['flags'][0].timestamp.isoformat() if data['flags'] else None,
-                    'problem_description': problem_description
+                    'problem_description': problem_description,
                 },
                 'message_count': len(chat_history),
                 'chat_history': chat_history,
@@ -387,9 +407,9 @@ def conversations():
                 'flagged_content_set': [f.content for f in data['flags']],
                 'team': {'name': team.name} if team else None,
                 'is_public': True,
-                'is_posted_by_user': session.user_id == current_user.id if session else False
+                'is_posted_by_user': session.user_id == current_user.id if session else False,
             })
-        
+
         return render_template(
             "roleplay/conversations.html",
             sessions_data=sessions_data,
@@ -397,7 +417,7 @@ def conversations():
             show_flagged_only=False,
             show_public_flags=True,
             user_teams=current_user.teams if current_user.is_authenticated else [],
-            max_ai_responses=MAX_AI_RESPONSES
+            max_ai_responses=MAX_AI_RESPONSES,
         )
     
     # Get all chat sessions for the current user, ordered by most recent
@@ -417,14 +437,9 @@ def conversations():
             # No flagged sessions, return empty result
             sessions_query = ChatSession.query.filter_by(id='non_existent_id')
     
-    # Paginate the results
-    pagination = sessions_query.paginate(page=page, per_page=per_page, error_out=False)
-    sessions = pagination.items
+    sessions = sessions_query.all()
 
-    all_user_sessions = ChatSession.query.filter_by(user_id=current_user.id).order_by(
-        ChatSession.created_at.asc(),
-        ChatSession.id.asc(),
-    ).all()
+    all_user_sessions = sorted(sessions, key=lambda s: (s.created_at or datetime.min, s.id or ""))
     title_totals = {}
     title_sequence_by_id = {}
     title_running_counts = {}
@@ -434,22 +449,46 @@ def conversations():
         title_running_counts[base_title] = title_running_counts.get(base_title, 0) + 1
         title_sequence_by_id[user_session.id] = title_running_counts[base_title]
     
-    # For each session, get the message count and chat history
+    session_ids = [session.id for session in sessions]
+
+    flagged_by_session = {sid: [] for sid in session_ids}
+    if session_ids:
+        all_flagged_messages = FlaggedResponse.query.filter(
+            FlaggedResponse.session_id.in_(session_ids),
+            FlaggedResponse.user_id == current_user.id,
+        ).all()
+        for flagged in all_flagged_messages:
+            flagged_by_session.setdefault(flagged.session_id, []).append(flagged)
+
+    chat_history_by_session = {}
+    missing_history_session_ids = []
+    for sid in session_ids:
+        history = get_chat_history(sid)
+        if history is None:
+            missing_history_session_ids.append(sid)
+        else:
+            chat_history_by_session[sid] = history
+
+    if missing_history_session_ids:
+        db_messages = ChatMessage.query.filter(
+            ChatMessage.session_id.in_(missing_history_session_ids)
+        ).order_by(ChatMessage.session_id.asc(), ChatMessage.message_index.asc()).all()
+
+        grouped_db_history = {sid: [] for sid in missing_history_session_ids}
+        for msg in db_messages:
+            grouped_db_history.setdefault(msg.session_id, []).append({
+                'role': msg.role,
+                'content': msg.content,
+                'timestamp': msg.timestamp.isoformat() if msg.timestamp else None,
+            })
+
+        for sid in missing_history_session_ids:
+            chat_history_by_session[sid] = grouped_db_history.get(sid, [])
+
     sessions_data = []
     for session in sessions:
-        # Try to get chat history from Redis first, then from database
-        chat_history = get_chat_history(session.id)
-        
-        # If no Redis history, get from database
-        if not chat_history:
-            db_messages = ChatMessage.query.filter_by(session_id=session.id).order_by(ChatMessage.timestamp).all()
-            chat_history = [{'role': msg.role, 'content': msg.content, 'timestamp': msg.timestamp.isoformat() if msg.timestamp else None} for msg in db_messages]
-        
-        # Get flagged messages for this session
-        flagged_messages = FlaggedResponse.query.filter_by(
-            session_id=session.id,
-            user_id=current_user.id
-        ).all()
+        chat_history = chat_history_by_session.get(session.id, [])
+        flagged_messages = flagged_by_session.get(session.id, [])
         
         # Create a list of flagged content for quick lookup (convert set to list for JSON serialization)
         flagged_content_list = [f.content for f in flagged_messages]
@@ -465,7 +504,6 @@ def conversations():
                     # Try to extract role title from system message
                     if 'v roli' in content:
                         # Extract role title from pattern "v roli 'Title'"
-                        import re
                         match = re.search(r"v roli '([^']+)'", content)
                         if match:
                             role_title = match.group(1)
@@ -506,7 +544,7 @@ def conversations():
     return render_template(
         "roleplay/conversations.html",
         sessions_data=sessions_data,
-        pagination=pagination,
+        pagination=None,
         show_flagged_only=show_flagged_only,
         user_teams=current_user.teams,
         max_ai_responses=MAX_AI_RESPONSES
@@ -525,11 +563,9 @@ def teams():
         flash("Soutěž již skončila. Správa týmů není k dispozici.", "warning")
         return redirect(url_for("public.index"))
     
-    # Get user's teams
     user_teams_db = current_user.teams
     app.logger.info(f"--- Initial user_teams_db (current_user.teams): {list(user_teams_db)} ---")
-    
-    # Get all teams
+
     all_teams_db = Team.query.order_by(Team.name).all()
     app.logger.info(f"--- Initial all_teams_db: {list(all_teams_db)} ---")
 
@@ -539,81 +575,121 @@ def teams():
         if not team_list:
             app.logger.warning("--- process_team_description received an empty or None team_list ---")
             return []
-            
+
         for team_obj in team_list:
-            # Initialize attributes
-            team_obj.creator_id = None
             team_obj.display_description = "Tento tým nemá popis."
+            # Keep DB-backed creator_id as fallback; some legacy rows store it in description JSON.
+            creator_id = team_obj.creator_id
 
             if team_obj.description:
                 try:
                     description_data = json.loads(team_obj.description)
                     if isinstance(description_data, dict):
                         team_obj.display_description = description_data.get("original_description", team_obj.description)
-                        
                         parsed_creator_id = description_data.get("creator_id")
                         if parsed_creator_id is not None:
                             try:
-                                team_obj.creator_id = int(parsed_creator_id)
+                                creator_id = int(parsed_creator_id)
                             except (ValueError, TypeError):
-                                app.logger.warning(f"Team '{team_obj.name}': creator_id '{parsed_creator_id}' is not a valid integer. Kept as None.")
-                                pass 
+                                app.logger.warning(
+                                    f"Team '{team_obj.name}': creator_id '{parsed_creator_id}' is not a valid integer."
+                                )
                     else:
                         team_obj.display_description = team_obj.description
                 except (json.JSONDecodeError, TypeError):
-                    app.logger.warning(f"Team '{team_obj.name}': Failed to parse description JSON. Raw description: {team_obj.description}")
+                    app.logger.warning(
+                        f"Team '{team_obj.name}': Failed to parse description JSON. Raw description: {team_obj.description}"
+                    )
                     team_obj.display_description = team_obj.description if team_obj.description else "Chyba při čtení popisu."
-            
+
+            team_obj.creator_id = creator_id
             processed_teams.append(team_obj)
+
         app.logger.info(f"--- process_team_description finished, processed_teams: {processed_teams} ---")
         return processed_teams
-    
+
+    user_teams_processed = process_team_description(list(user_teams_db))
+    all_teams_processed = process_team_description(list(all_teams_db))
+
+    user_team_ids = {team.id for team in user_teams_processed}
+    all_team_ids = [team.id for team in all_teams_processed]
+
+    members_by_team = {team_id: [] for team_id in all_team_ids}
+    if all_team_ids:
+        member_rows = db.session.query(
+            team_membership.c.team_id,
+            User.id,
+            User.email,
+            User.name,
+        ).join(User, User.id == team_membership.c.user_id).filter(
+            team_membership.c.team_id.in_(all_team_ids)
+        ).all()
+
+        for team_id, member_id, member_email, member_name in member_rows:
+            members_by_team.setdefault(team_id, []).append({
+                'id': member_id,
+                'email': member_email,
+                'name': member_name,
+            })
+
+    flagged_counts_by_team = {team_id: 0 for team_id in all_team_ids}
+    if all_team_ids:
+        flagged_count_rows = db.session.query(
+            FlaggedResponse.team_id,
+            func.count(FlaggedResponse.id),
+        ).filter(
+            FlaggedResponse.team_id.in_(all_team_ids)
+        ).group_by(FlaggedResponse.team_id).all()
+
+        for team_id, flagged_count in flagged_count_rows:
+            flagged_counts_by_team[team_id] = int(flagged_count)
+
+    creator_team_ids = [team.id for team in all_teams_processed if team.creator_id == current_user.id]
+    pending_invites_by_team = {team_id: [] for team_id in creator_team_ids}
+    if creator_team_ids:
+        pending_invites_rows = TeamInvitation.query.filter(
+            TeamInvitation.team_id.in_(creator_team_ids),
+            TeamInvitation.status == 'pending',
+        ).order_by(TeamInvitation.created_at.desc()).all()
+
+        for inv in pending_invites_rows:
+            pending_invites_by_team.setdefault(inv.team_id, []).append({
+                'id': inv.id,
+                'invitee_email': inv.invitee_email,
+                'created_at': inv.created_at.isoformat() if inv.created_at else None,
+            })
+
+    for team_obj in all_teams_processed:
+        team_obj.member_count = len(members_by_team.get(team_obj.id, []))
+
+    for team_obj in user_teams_processed:
+        team_obj.member_count = len(members_by_team.get(team_obj.id, []))
+
     def serialize_team(team_obj):
         """Serialize team object for JSON"""
-        # Check if current user is a member of this team
-        is_member = current_user in team_obj.members.all()
+        is_member = team_obj.id in user_team_ids
         is_creator = team_obj.creator_id == current_user.id
-        
+
         members_list = []
-        for member in team_obj.members.all():
+        for member in members_by_team.get(team_obj.id, []):
             member_data = {
-                'id': member.id
+                'id': member['id']
             }
-            
-            # Only show email/name if current user is a member of the team
+
             if is_member:
-                member_data['email'] = member.email
-                member_data['name'] = member.name if hasattr(member, 'name') and member.name else member.email
+                member_data['email'] = member['email']
+                member_data['name'] = member['name'] if member['name'] else member['email']
             else:
-                # Show anonymized data for non-members
                 member_data['email'] = None
-                member_data['name'] = f'Člen {member.id}'
-            
+                member_data['name'] = f"Člen {member['id']}"
+
             members_list.append(member_data)
-        
-        # Get pending invitations count (only for creator)
-        pending_invites_count = 0
-        pending_invites = []
-        if is_creator:
-            pending_invitations = TeamInvitation.query.filter_by(
-                team_id=team_obj.id,
-                status='pending'
-            ).all()
-            pending_invites_count = len(pending_invitations)
-            pending_invites = [
-                {
-                    'id': inv.id,
-                    'invitee_email': inv.invitee_email,
-                    'created_at': inv.created_at.isoformat() if inv.created_at else None
-                }
-                for inv in pending_invitations
-            ]
-        
-        # Get flagged responses count (only for team members)
-        flagged_responses_count = 0
-        if is_member:
-            flagged_responses_count = FlaggedResponse.query.filter_by(team_id=team_obj.id).count()
-        
+
+        pending_invites = pending_invites_by_team.get(team_obj.id, []) if is_creator else []
+        pending_invites_count = len(pending_invites)
+
+        flagged_responses_count = flagged_counts_by_team.get(team_obj.id, 0) if is_member else 0
+
         return {
             'id': team_obj.id,
             'name': team_obj.name,
@@ -629,10 +705,6 @@ def teams():
             'pending_invites': pending_invites,
             'flagged_responses_count': flagged_responses_count
         }
-
-    # Process teams
-    user_teams_processed = process_team_description(list(user_teams_db)) 
-    all_teams_processed = process_team_description(list(all_teams_db))
 
     # Debug logging
     app.logger.info("--- Debugging user_teams_processed in /teams route ---")
@@ -1174,6 +1246,24 @@ def invite_to_team(team_id):
                 normalized_emails.append(normalized_email)
                 seen_emails.add(normalized_email)
 
+        member_emails = {member.email for member in team.members.all()}
+        existing_users = User.query.filter(User.email.in_(normalized_emails)).all() if normalized_emails else []
+        users_by_email = {user.email: user for user in existing_users}
+
+        existing_pending_invites = TeamInvitation.query.filter(
+            TeamInvitation.team_id == team_id,
+            TeamInvitation.invitee_email.in_(normalized_emails),
+            TeamInvitation.status == 'pending'
+        ).all() if normalized_emails else []
+        existing_pending_email_set = {inv.invitee_email for inv in existing_pending_invites}
+
+        recent_invites = TeamInvitation.query.filter(
+            TeamInvitation.team_id == team_id,
+            TeamInvitation.invitee_email.in_(normalized_emails),
+            TeamInvitation.created_at >= resend_cooldown_start
+        ).all() if normalized_emails else []
+        recent_invite_email_set = {inv.invitee_email for inv in recent_invites}
+
         invited_count = 0
         invalid_count = 0
         skipped_count = 0
@@ -1198,29 +1288,18 @@ def invite_to_team(team_id):
                 continue
             
             # Existing users already in team are skipped (generic response, no enumeration leak)
-            user = User.query.filter_by(email=email).first()
-            if user in team.members:
+            user = users_by_email.get(email)
+            if user and email in member_emails:
                 skipped_count += 1
                 continue
 
             # Skip if pending invitation already exists
-            existing_invite = TeamInvitation.query.filter_by(
-                team_id=team_id,
-                invitee_email=email,
-                status='pending'
-            ).first()
-            
-            if existing_invite:
+            if email in existing_pending_email_set:
                 skipped_count += 1
                 continue
 
             # Cooldown protection to avoid repeated sending to the same target
-            recent_invite = TeamInvitation.query.filter(
-                TeamInvitation.team_id == team_id,
-                TeamInvitation.invitee_email == email,
-                TeamInvitation.created_at >= resend_cooldown_start
-            ).first()
-            if recent_invite:
+            if email in recent_invite_email_set:
                 skipped_count += 1
                 continue
             
@@ -1271,7 +1350,10 @@ def invite_to_team(team_id):
 def get_pending_invitations():
     """Get all pending invitations for the current user."""
     try:
-        invitations = TeamInvitation.query.filter_by(
+        invitations = TeamInvitation.query.options(
+            joinedload(TeamInvitation.team),
+            joinedload(TeamInvitation.inviter),
+        ).filter_by(
             invitee_email=current_user.email,
             status='pending'
         ).order_by(TeamInvitation.created_at.desc()).all()
@@ -1393,7 +1475,9 @@ def get_team_pending_invitations(team_id):
         return jsonify({"success": False, "error": "Pouze tvůrce týmu může vidět pozvánky."}), 403
     
     try:
-        invitations = TeamInvitation.query.filter_by(
+        invitations = TeamInvitation.query.options(
+            joinedload(TeamInvitation.inviter),
+        ).filter_by(
             team_id=team_id,
             status='pending'
         ).order_by(TeamInvitation.created_at.desc()).all()

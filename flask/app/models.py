@@ -16,7 +16,8 @@ def load_user(user_id):
 # Team membership association table
 team_membership = db.Table('team_membership',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
-    db.Column('team_id', db.Integer, db.ForeignKey('teams.id'), primary_key=True)
+    db.Column('team_id', db.Integer, db.ForeignKey('teams.id'), primary_key=True),
+    db.Index('ix_team_membership_team_id_user_id', 'team_id', 'user_id')
 )
 
 
@@ -275,6 +276,10 @@ class ChatSession(db.Model):
     role_title = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now())
+
+    __table_args__ = (
+        db.Index('ix_chat_sessions_user_created_id', 'user_id', 'created_at', 'id'),
+    )
     
     # Relationship
     user = db.relationship("User", backref=db.backref("chat_sessions", lazy=True))
@@ -306,6 +311,12 @@ class FlaggedResponse(db.Model):
     summary = db.Column(db.Text(), nullable=True)  # New field for the flag summary
     timestamp = db.Column(db.DateTime, server_default=db.func.now())
     is_public = db.Column(db.Boolean, default=False)  # Controls visibility to other users
+
+    __table_args__ = (
+        db.Index('ix_flagged_responses_user_session', 'user_id', 'session_id'),
+        db.Index('ix_flagged_responses_public_timestamp_session', 'is_public', 'timestamp', 'session_id'),
+        db.Index('ix_flagged_responses_team_id', 'team_id'),
+    )
     
     # Relationships
     user = db.relationship("User", backref=db.backref("flagged_responses", lazy=True))
@@ -333,6 +344,10 @@ class ChatMessage(db.Model):
     content = db.Column(db.Text(), nullable=False)
     timestamp = db.Column(db.DateTime, server_default=db.func.now())
     message_index = db.Column(db.Integer, nullable=False)  # To maintain message order
+
+    __table_args__ = (
+        db.Index('ix_chat_messages_session_message_index', 'session_id', 'message_index'),
+    )
     
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
@@ -385,6 +400,13 @@ class TeamInvitation(db.Model):
     message = db.Column(db.Text(), nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     responded_at = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        db.Index('ix_team_invitations_team_status_created_at', 'team_id', 'status', 'created_at'),
+        db.Index('ix_team_invitations_invitee_status_created_at', 'invitee_email', 'status', 'created_at'),
+        db.Index('ix_team_invitations_team_invitee_created_at', 'team_id', 'invitee_email', 'created_at'),
+        db.Index('ix_team_invitations_inviter_created_at', 'inviter_id', 'created_at'),
+    )
     
     # Relationships
     inviter = db.relationship("User", foreign_keys=[inviter_id], backref="sent_invitations")
