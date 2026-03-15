@@ -750,11 +750,18 @@ def admin_dashboard():
     user_email_filter = (request.args.get("user_email") or "").strip()
     visibility_filter = (request.args.get("visibility") or "all").strip().lower()
     selected_team_id = request.args.get("team_id", type=int)
-    lookback_days = request.args.get("days", 30, type=int)
-    if lookback_days not in [1, 7, 30, 90]:
-        lookback_days = 30
-
-    since_dt = now - timedelta(days=lookback_days)
+    lookback_value = (request.args.get("days") or "30").strip().lower()
+    if lookback_value == "all":
+        since_dt = None
+    else:
+        try:
+            lookback_days = int(lookback_value)
+        except ValueError:
+            lookback_days = 30
+        if lookback_days not in [1, 7, 30, 90]:
+            lookback_days = 30
+        lookback_value = str(lookback_days)
+        since_dt = now - timedelta(days=lookback_days)
 
     # Pagination params per section
     page_flags = request.args.get("page_flags", 1, type=int)
@@ -782,7 +789,10 @@ def admin_dashboard():
         joinedload(FlaggedResponse.user),
         joinedload(FlaggedResponse.team),
         joinedload(FlaggedResponse.session),
-    ).filter(FlaggedResponse.timestamp >= since_dt)
+    )
+
+    if since_dt is not None:
+        moderation_query = moderation_query.filter(FlaggedResponse.timestamp >= since_dt)
 
     if visibility_filter == "public":
         moderation_query = moderation_query.filter(FlaggedResponse.is_public.is_(True))
@@ -820,8 +830,10 @@ def admin_dashboard():
         func.max(FlaggedResponse.timestamp).label("latest_public_flag_at"),
     ).filter(
         FlaggedResponse.is_public.is_(True),
-        FlaggedResponse.timestamp >= since_dt,
     ).group_by(FlaggedResponse.session_id)
+
+    if since_dt is not None:
+        published_base = published_base.filter(FlaggedResponse.timestamp >= since_dt)
 
     if selected_team_id:
         published_base = published_base.filter(FlaggedResponse.team_id == selected_team_id)
@@ -909,9 +921,10 @@ def admin_dashboard():
         func.count(FlaggedResponse.id).label("flag_count"),
     ).join(
         FlaggedResponse, FlaggedResponse.team_id == Team.id
-    ).filter(
-        FlaggedResponse.timestamp >= since_dt
-    ).group_by(
+    )
+    if since_dt is not None:
+        top_team_rows = top_team_rows.filter(FlaggedResponse.timestamp >= since_dt)
+    top_team_rows = top_team_rows.group_by(
         Team.id,
         Team.name,
     ).order_by(
@@ -924,9 +937,10 @@ def admin_dashboard():
         func.count(FlaggedResponse.id).label("flag_count"),
     ).join(
         FlaggedResponse, FlaggedResponse.user_id == User.id
-    ).filter(
-        FlaggedResponse.timestamp >= since_dt
-    ).group_by(
+    )
+    if since_dt is not None:
+        top_user_rows = top_user_rows.filter(FlaggedResponse.timestamp >= since_dt)
+    top_user_rows = top_user_rows.group_by(
         User.id,
         User.email,
     ).order_by(
@@ -968,7 +982,7 @@ def admin_dashboard():
         top_user_rows=top_user_rows,
         recent_activity=recent_activity,
         all_teams=all_teams,
-        lookback_days=lookback_days,
+        lookback_value=lookback_value,
         visibility_filter=visibility_filter,
         selected_team_id=selected_team_id,
         user_email_filter=user_email_filter,
@@ -1013,6 +1027,39 @@ def admin_set_flag_visibility(flagged_id):
         return jsonify({"success": True, "is_public": flagged_response.is_public})
 
     flash("Viditelnost označení byla aktualizována.", "success")
+    next_url = request.form.get("next")
+    if next_url:
+        return redirect(next_url)
+    return redirect(url_for("roleplay.admin_dashboard", **request.args.to_dict()))
+
+
+@roleplay.route("/admin-dashboard/reset-publications", methods=["POST"])
+@login_required
+def admin_reset_publications():
+    """Set all published flagged responses back to private (competition reset)."""
+    if not current_user.is_super_admin:
+        return jsonify({"success": False, "error": "Přístup odepřen."}), 403
+
+    try:
+        updated_count = FlaggedResponse.query.filter(
+            FlaggedResponse.is_public.is_(True)
+        ).update(
+            {FlaggedResponse.is_public: False},
+            synchronize_session=False,
+        )
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error resetting publications: {str(e)}")
+        if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+            return jsonify({"success": False, "error": "Reset zveřejnění se nezdařil."}), 500
+        flash("Reset zveřejnění se nezdařil.", "danger")
+        return redirect(url_for("roleplay.admin_dashboard", **request.args.to_dict()))
+
+    if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+        return jsonify({"success": True, "updated_count": int(updated_count or 0)})
+
+    flash(f"Reset dokončen: {int(updated_count or 0)} označení bylo nastaveno jako soukromé.", "success")
     next_url = request.form.get("next")
     if next_url:
         return redirect(next_url)

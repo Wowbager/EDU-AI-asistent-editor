@@ -119,10 +119,11 @@
                                                 <div class="form-group col-md-2">
                                                     <label for="days">Období</label>
                                                     <select id="days" name="days" class="form-control">
-                                                        <option value="1" {% if lookback_days == 1 %}selected{% endif %}>1 den</option>
-                                                        <option value="7" {% if lookback_days == 7 %}selected{% endif %}>7 dní</option>
-                                                        <option value="30" {% if lookback_days == 30 %}selected{% endif %}>30 dní</option>
-                                                        <option value="90" {% if lookback_days == 90 %}selected{% endif %}>90 dní</option>
+                                                        <option value="1" {% if lookback_value == '1' %}selected{% endif %}>1 den</option>
+                                                        <option value="7" {% if lookback_value == '7' %}selected{% endif %}>7 dní</option>
+                                                        <option value="30" {% if lookback_value == '30' %}selected{% endif %}>30 dní</option>
+                                                        <option value="90" {% if lookback_value == '90' %}selected{% endif %}>90 dní</option>
+                                                        <option value="all" {% if lookback_value == 'all' %}selected{% endif %}>Bez limitu</option>
                                                     </select>
                                                 </div>
                                                 <div class="form-group col-md-1 d-flex align-items-end">
@@ -142,6 +143,13 @@
                                         <div class="d-flex justify-content-between mb-2"><span>Nové chaty za 24h</span><strong>{{ recent_activity.sessions_24h }}</strong></div>
                                         <div class="d-flex justify-content-between mb-2"><span>Nové chaty za 7 dní</span><strong>{{ recent_activity.sessions_7d }}</strong></div>
                                         <div class="d-flex justify-content-between mb-0"><span>Sezení s nahlášením</span><strong>{{ flagged_sessions_count }}</strong></div>
+                                        <hr>
+                                        <form method="POST" action="{{ url_for('roleplay.admin_reset_publications') }}" onsubmit="return confirm('Reset publikace pro soutěž: nastavit všechna veřejná označení jako soukromá?');">
+                                            <input type="hidden" name="next" value="{{ request.url }}">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm btn-block">
+                                                Reset soutěže: Vše na soukromé
+                                            </button>
+                                        </form>
                                     </div>
                                 </div>
                             </div>
