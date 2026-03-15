@@ -737,46 +737,334 @@ def teams():
 @roleplay.route("/admin-dashboard", methods=["GET"])
 @login_required
 def admin_dashboard():
-    """
-    Admin page to view all chats, teams, and flagged messages.
-    Only accessible to super admin users.
-    """
+    """Operational admin workspace for moderation, publication control, teams, and statistics."""
     if not current_user.is_super_admin:
         flash("Přístup odepřen: Nemáte oprávnění k zobrazení této stránky.", "danger")
         return redirect(url_for("roleplay.roleplay_home"))
 
-    # Fetching data for summary cards
+    now = datetime.utcnow()
+    time_24_hours_ago = now - timedelta(hours=24)
+
+    # Shared filters
+    search_query = (request.args.get("q") or "").strip()
+    user_email_filter = (request.args.get("user_email") or "").strip()
+    visibility_filter = (request.args.get("visibility") or "all").strip().lower()
+    selected_team_id = request.args.get("team_id", type=int)
+    lookback_days = request.args.get("days", 30, type=int)
+    if lookback_days not in [1, 7, 30, 90]:
+        lookback_days = 30
+
+    since_dt = now - timedelta(days=lookback_days)
+
+    # Pagination params per section
+    page_flags = request.args.get("page_flags", 1, type=int)
+    page_published = request.args.get("page_published", 1, type=int)
+    page_teams = request.args.get("page_teams", 1, type=int)
+    per_page_flags = 15
+    per_page_published = 10
+    per_page_teams = 12
+
     total_users = User.query.count()
-    time_24_hours_ago = datetime.utcnow() - timedelta(days=1)
+    total_chat_sessions = ChatSession.query.count()
+    total_teams = Team.query.count()
+    total_flags = FlaggedResponse.query.count()
+    public_flags_count = FlaggedResponse.query.filter_by(is_public=True).count()
+    private_flags_count = max(total_flags - public_flags_count, 0)
     chats_last_24h = ChatSession.query.filter(ChatSession.created_at >= time_24_hours_ago).count()
     flags_last_24h = FlaggedResponse.query.filter(FlaggedResponse.timestamp >= time_24_hours_ago).count()
 
-    # Pagination parameters
-    page_chats = request.args.get('page_chats', 1, type=int)
-    page_teams = request.args.get('page_teams', 1, type=int)
-    page_flags = request.args.get('page_flags', 1, type=int)
-    PER_PAGE = 12
+    flagged_sessions_count = db.session.query(func.count(func.distinct(FlaggedResponse.session_id))).scalar() or 0
+    published_sessions_count = db.session.query(
+        func.count(func.distinct(FlaggedResponse.session_id))
+    ).filter(FlaggedResponse.is_public.is_(True)).scalar() or 0
 
-    # Paginated queries
-    all_chats_pagination = ChatSession.query.order_by(ChatSession.created_at.desc()).paginate(
-        page=page_chats, per_page=PER_PAGE, error_out=False
+    moderation_query = FlaggedResponse.query.options(
+        joinedload(FlaggedResponse.user),
+        joinedload(FlaggedResponse.team),
+        joinedload(FlaggedResponse.session),
+    ).filter(FlaggedResponse.timestamp >= since_dt)
+
+    if visibility_filter == "public":
+        moderation_query = moderation_query.filter(FlaggedResponse.is_public.is_(True))
+    elif visibility_filter == "private":
+        moderation_query = moderation_query.filter(FlaggedResponse.is_public.is_(False))
+
+    if selected_team_id:
+        moderation_query = moderation_query.filter(FlaggedResponse.team_id == selected_team_id)
+
+    if user_email_filter:
+        moderation_query = moderation_query.filter(
+            FlaggedResponse.user.has(User.email.ilike(f"%{user_email_filter}%"))
+        )
+
+    if search_query:
+        moderation_query = moderation_query.filter(
+            db.or_(
+                FlaggedResponse.id.ilike(f"%{search_query}%"),
+                FlaggedResponse.session_id.ilike(f"%{search_query}%"),
+                FlaggedResponse.content.ilike(f"%{search_query}%"),
+                FlaggedResponse.summary.ilike(f"%{search_query}%"),
+                FlaggedResponse.user.has(User.email.ilike(f"%{search_query}%")),
+            )
+        )
+
+    moderation_flags = moderation_query.order_by(FlaggedResponse.timestamp.desc()).paginate(
+        page=page_flags,
+        per_page=per_page_flags,
+        error_out=False,
     )
-    all_teams_pagination = Team.query.order_by(Team.name).paginate(
-        page=page_teams, per_page=PER_PAGE, error_out=False
+
+    published_base = db.session.query(
+        FlaggedResponse.session_id.label("session_id"),
+        func.count(FlaggedResponse.id).label("public_flags_count"),
+        func.max(FlaggedResponse.timestamp).label("latest_public_flag_at"),
+    ).filter(
+        FlaggedResponse.is_public.is_(True),
+        FlaggedResponse.timestamp >= since_dt,
+    ).group_by(FlaggedResponse.session_id)
+
+    if selected_team_id:
+        published_base = published_base.filter(FlaggedResponse.team_id == selected_team_id)
+
+    if user_email_filter:
+        published_base = published_base.filter(
+            FlaggedResponse.user.has(User.email.ilike(f"%{user_email_filter}%"))
+        )
+
+    if search_query:
+        published_base = published_base.filter(
+            db.or_(
+                FlaggedResponse.session_id.ilike(f"%{search_query}%"),
+                FlaggedResponse.summary.ilike(f"%{search_query}%"),
+                FlaggedResponse.user.has(User.email.ilike(f"%{search_query}%")),
+            )
+        )
+
+    published_subquery = published_base.subquery()
+
+    published_sessions_query = db.session.query(
+        ChatSession,
+        User.email.label("owner_email"),
+        published_subquery.c.public_flags_count,
+        published_subquery.c.latest_public_flag_at,
+    ).join(
+        published_subquery, ChatSession.id == published_subquery.c.session_id
+    ).join(
+        User, ChatSession.user_id == User.id
     )
-    all_flagged_messages_pagination = FlaggedResponse.query.order_by(FlaggedResponse.timestamp.desc()).paginate(
-        page=page_flags, per_page=PER_PAGE, error_out=False
+
+    if search_query:
+        published_sessions_query = published_sessions_query.filter(
+            db.or_(
+                ChatSession.id.ilike(f"%{search_query}%"),
+                ChatSession.role_title.ilike(f"%{search_query}%"),
+                User.email.ilike(f"%{search_query}%"),
+            )
+        )
+
+    published_sessions_pagination = published_sessions_query.order_by(
+        published_subquery.c.latest_public_flag_at.desc()
+    ).paginate(page=page_published, per_page=per_page_published, error_out=False)
+
+    published_session_ids = [row.ChatSession.id for row in published_sessions_pagination.items]
+    message_counts_by_session = {}
+    if published_session_ids:
+        message_count_rows = db.session.query(
+            ChatMessage.session_id,
+            func.count(ChatMessage.id),
+        ).filter(
+            ChatMessage.session_id.in_(published_session_ids)
+        ).group_by(ChatMessage.session_id).all()
+
+        message_counts_by_session = {session_id: int(cnt) for session_id, cnt in message_count_rows}
+
+    published_rows = []
+    for row in published_sessions_pagination.items:
+        published_rows.append({
+            "session": row.ChatSession,
+            "owner_email": row.owner_email,
+            "public_flags_count": int(row.public_flags_count or 0),
+            "latest_public_flag_at": row.latest_public_flag_at,
+            "message_count": message_counts_by_session.get(row.ChatSession.id, 0),
+        })
+
+    teams_pagination = Team.query.order_by(Team.name.asc()).paginate(
+        page=page_teams,
+        per_page=per_page_teams,
+        error_out=False,
     )
+
+    teams_rows = []
+    for team in teams_pagination.items:
+        teams_rows.append({
+            "team": team,
+            "member_count": team.members.count(),
+            "flagged_count": FlaggedResponse.query.filter_by(team_id=team.id).count(),
+            "public_flagged_count": FlaggedResponse.query.filter_by(team_id=team.id, is_public=True).count(),
+            "pending_invitations": TeamInvitation.query.filter_by(team_id=team.id, status="pending").count(),
+        })
+
+    top_team_rows = db.session.query(
+        Team.name,
+        func.count(FlaggedResponse.id).label("flag_count"),
+    ).join(
+        FlaggedResponse, FlaggedResponse.team_id == Team.id
+    ).filter(
+        FlaggedResponse.timestamp >= since_dt
+    ).group_by(
+        Team.id,
+        Team.name,
+    ).order_by(
+        func.count(FlaggedResponse.id).desc(),
+        Team.name.asc(),
+    ).limit(5).all()
+
+    top_user_rows = db.session.query(
+        User.email,
+        func.count(FlaggedResponse.id).label("flag_count"),
+    ).join(
+        FlaggedResponse, FlaggedResponse.user_id == User.id
+    ).filter(
+        FlaggedResponse.timestamp >= since_dt
+    ).group_by(
+        User.id,
+        User.email,
+    ).order_by(
+        func.count(FlaggedResponse.id).desc(),
+        User.email.asc(),
+    ).limit(5).all()
+
+    recent_activity = {
+        "flags_24h": flags_last_24h,
+        "flags_7d": FlaggedResponse.query.filter(
+            FlaggedResponse.timestamp >= now - timedelta(days=7)
+        ).count(),
+        "sessions_24h": chats_last_24h,
+        "sessions_7d": ChatSession.query.filter(
+            ChatSession.created_at >= now - timedelta(days=7)
+        ).count(),
+    }
+
+    all_teams = Team.query.order_by(Team.name.asc()).all()
 
     return render_template(
         "roleplay/admin_dashboard.html",
         total_users=total_users,
+        total_chat_sessions=total_chat_sessions,
+        total_teams=total_teams,
+        total_flags=total_flags,
+        public_flags_count=public_flags_count,
+        private_flags_count=private_flags_count,
+        flagged_sessions_count=flagged_sessions_count,
+        published_sessions_count=published_sessions_count,
         chats_last_24h=chats_last_24h,
         flags_last_24h=flags_last_24h,
-        all_chats_pagination=all_chats_pagination,
-        all_teams_pagination=all_teams_pagination,
-        all_flagged_messages_pagination=all_flagged_messages_pagination
+        moderation_flags=moderation_flags,
+        published_sessions_pagination=published_sessions_pagination,
+        published_rows=published_rows,
+        teams_pagination=teams_pagination,
+        teams_rows=teams_rows,
+        top_team_rows=top_team_rows,
+        top_user_rows=top_user_rows,
+        recent_activity=recent_activity,
+        all_teams=all_teams,
+        lookback_days=lookback_days,
+        visibility_filter=visibility_filter,
+        selected_team_id=selected_team_id,
+        user_email_filter=user_email_filter,
+        search_query=search_query,
     )
+
+
+@roleplay.route("/admin-dashboard/flag/<flagged_id>/visibility", methods=["POST"])
+@login_required
+def admin_set_flag_visibility(flagged_id):
+    """Allow super admin to override any flagged response visibility."""
+    if not current_user.is_super_admin:
+        return jsonify({"success": False, "error": "Přístup odepřen."}), 403
+
+    flagged_response = FlaggedResponse.query.get(flagged_id)
+    if not flagged_response:
+        return jsonify({"success": False, "error": "Označení nebylo nalezeno."}), 404
+
+    raw_is_public = request.form.get("is_public")
+    if raw_is_public is None and request.is_json:
+        payload = request.get_json(silent=True) or {}
+        raw_is_public = payload.get("is_public")
+
+    if raw_is_public is None:
+        flash("Nepodařilo se změnit viditelnost: chybí hodnota.", "danger")
+        return redirect(url_for("roleplay.admin_dashboard", **request.args.to_dict()))
+
+    is_public = str(raw_is_public).strip().lower() in ["1", "true", "yes", "on"]
+    flagged_response.is_public = is_public
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error changing admin visibility for flag {flagged_id}: {str(e)}")
+        if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+            return jsonify({"success": False, "error": "Změna viditelnosti se nezdařila."}), 500
+        flash("Změna viditelnosti se nezdařila.", "danger")
+        return redirect(url_for("roleplay.admin_dashboard", **request.args.to_dict()))
+
+    if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+        return jsonify({"success": True, "is_public": flagged_response.is_public})
+
+    flash("Viditelnost označení byla aktualizována.", "success")
+    next_url = request.form.get("next")
+    if next_url:
+        return redirect(next_url)
+    return redirect(url_for("roleplay.admin_dashboard", **request.args.to_dict()))
+
+
+@roleplay.route("/admin-dashboard/session/<session_id>", methods=["GET"])
+@login_required
+def admin_session_detail(session_id):
+    """Return complete session detail for admin transcript inspection."""
+    if not current_user.is_super_admin:
+        return jsonify({"success": False, "error": "Přístup odepřen."}), 403
+
+    session = ChatSession.query.options(joinedload(ChatSession.user)).filter_by(id=session_id).first()
+    if not session:
+        return jsonify({"success": False, "error": "Relace nebyla nalezena."}), 404
+
+    chat_history = get_chat_history(session_id)
+    if chat_history is None:
+        db_messages = ChatMessage.query.filter_by(session_id=session_id).order_by(ChatMessage.message_index.asc()).all()
+        chat_history = [{
+            "role": msg.role,
+            "content": msg.content,
+            "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
+        } for msg in db_messages]
+
+    flags = FlaggedResponse.query.options(
+        joinedload(FlaggedResponse.user),
+        joinedload(FlaggedResponse.team),
+    ).filter_by(session_id=session_id).order_by(FlaggedResponse.timestamp.asc()).all()
+
+    return jsonify({
+        "success": True,
+        "session": {
+            "id": session.id,
+            "role_id": session.role_id,
+            "role_title": (session.role_title or "").strip() or "Konverzace",
+            "created_at": session.created_at.isoformat() if session.created_at else None,
+            "updated_at": session.updated_at.isoformat() if session.updated_at else None,
+            "owner_email": session.user.email if session.user else "Neznámý uživatel",
+        },
+        "chat_history": chat_history,
+        "flags": [{
+            "id": f.id,
+            "content": f.content,
+            "summary": f.summary,
+            "is_public": f.is_public,
+            "timestamp": f.timestamp.isoformat() if f.timestamp else None,
+            "user_email": f.user.email if f.user else "Neznámý uživatel",
+            "team_name": f.team.name if f.team else None,
+        } for f in flags],
+    })
 
 @roleplay.route("/flag", methods=["POST"])
 @login_required
