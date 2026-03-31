@@ -5,6 +5,7 @@ import openai
 import redis
 import pickle
 import os
+import warnings
 
 from app import app, db
 from app.models import ChatMessage, ChatSession
@@ -51,6 +52,11 @@ except Exception as e:
 
 def count_assistant_messages(chat_history):
     """Count the number of assistant messages in the chat history"""
+    warnings.warn(
+        "count_assistant_messages is deprecated and will be removed in a future cleanup.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if not chat_history:
         return 0
     return sum(1 for msg in chat_history if msg.get('role') == 'assistant')
@@ -256,6 +262,11 @@ def save_chat_history(session_id, chat_history):
     Save chat history to both Redis and database for persistence.
     Redis for quick access, database for long-term storage.
     """
+    warnings.warn(
+        "save_chat_history is deprecated for roleplay websocket flow and will be removed in a future cleanup.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if not COMPETITION_RUNNING:
         print("Competition ended - chat history saving disabled")
         return False
@@ -302,6 +313,11 @@ def get_role_by_id(role_id):
     Returns:
         A dict with role information or None if not found
     """
+    warnings.warn(
+        "get_role_by_id is deprecated and scheduled for removal.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     try:
         # Handle custom roles
         if isinstance(role_id, str) and role_id.startswith('custom-'):
@@ -339,6 +355,11 @@ def prepare_messages_for_ai(chat_history):
     Returns:
         Filtered list of messages ready for OpenAI API
     """
+    warnings.warn(
+        "prepare_messages_for_ai is deprecated in the current roleplay implementation and will be removed.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if not chat_history:
         return []
     
@@ -388,3 +409,15 @@ def generate_session_id_for_roleplay_chat(role_information):
 
     redis_client.set(f"chat_history:{str(session_id)}", pickle.dumps(role_information), ex=30)
     return str(session_id)
+
+
+def delete_roleplay_session_bootstrap(session_id: str) -> bool:
+    """Delete one-time roleplay session bootstrap payload from Redis."""
+    if not redis_client:
+        return False
+
+    try:
+        redis_client.delete(f"chat_history:{session_id}")
+        return True
+    except Exception:
+        return False

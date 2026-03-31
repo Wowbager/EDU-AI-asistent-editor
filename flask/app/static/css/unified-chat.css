@@ -5,6 +5,88 @@
    This file only adds what is missing.
    =================================================================== */
 
+.uc-hidden {
+    display: none !important;
+}
+
+.uc-block {
+    display: block !important;
+}
+
+.uc-flex {
+    display: flex !important;
+}
+
+.uc-inline-flex-center {
+    display: inline-flex;
+    align-items: center;
+}
+
+.uc-footer-continue {
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+}
+
+.uc-input-error {
+    border-color: #dc3545 !important;
+}
+
+.uc-avatar-user {
+    background-color: #0a80ff;
+}
+
+.uc-avatar-assistant {
+    background-color: #17a2b8;
+}
+
+.uc-streaming-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-bottom: 0;
+}
+
+.roleplay-settings-card {
+    height: 100%;
+}
+
+.roleplay-settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.roleplay-custom-instructions {
+    flex-grow: 1;
+    resize: none;
+}
+
+.roleplay-flag-alert {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1050;
+}
+
+/* Prevent date/action overlap in roleplay conversation list. */
+.conversation-item .users-list-body > div:first-child {
+    padding-right: 10px;
+    max-width: calc(100% - 90px);
+}
+
+.conversation-item .users-list-body .users-list-action {
+    min-width: 85px;
+    max-width: 85px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.conversation-item .users-list-body .users-list-action small {
+    white-space: nowrap;
+}
+
 /* ── Input group (textarea + buttons row) ─────────────────────────── */
 .uc-input-group {
     display: flex;
@@ -54,4 +136,5 @@
 /* ── Flag info banner inside a message ────────────────────────────── */
 .message-item .message-content > .alert.alert-warning {
     font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
 }

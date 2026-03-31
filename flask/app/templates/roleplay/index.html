@@ -1,6 +1,11 @@
-{% extends "base.html" %} {% block title %}EDU AI Chat - Roleplay{% endblock %}
-{% block content %}
+{% extends "base.html" %}
+{% block title %}EDU AI Chat - Roleplay{% endblock %}
+
+{% block styles %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/unified-chat.css') }}">
+{% endblock %}
+
+{% block content %}
 <body>
     <div class="layout">
         <div class="content">
@@ -34,21 +39,14 @@
                     </header>
 
                     <div class="sidebar-body">
-                        <div class="card shadow-sm" style="height: 100%">
+                        <div class="card shadow-sm roleplay-settings-card">
                             <div class="card-header bg-primary text-white">
                                 <h6 class="mb-0">
                                     <i class="fas fa-magic me-2"></i>Vlastní
                                     roleplay chat
                                 </h6>
                             </div>
-                            <div
-                                class="card-body"
-                                style="
-                                    display: flex;
-                                    flex-direction: column;
-                                    gap: 0.5rem;
-                                "
-                            >
+                            <div class="card-body roleplay-settings-body">
                                 <!-- this one is not needed  -->
                                 <label
                                     for="custom-role-name"
@@ -75,10 +73,9 @@
                                     pro AI:
                                 </label>
                                 <textarea
-                                    class="form-control"
+                                    class="form-control roleplay-custom-instructions"
                                     id="custom-instructions"
                                     rows="4"
-                                    style="flex-grow: 1; resize: none"
                                     placeholder="Např. Jsi Albert Einstein. Představ se, mluv o fyzice, buď trochu excentrický..."
                                 ></textarea>
                                 <small
@@ -115,8 +112,7 @@
     </div>
 
     <!-- Alert for flag operations -->
-    <div class="alert alert-success" id="flag-alert"
-         style="display:none; position:fixed; top:20px; right:20px; z-index:1050;"></div>
+    <div class="alert alert-success roleplay-flag-alert uc-hidden" id="flag-alert"></div>
 
     <!-- AI Generated Roles Modal -->
     <div class="modal fade" id="aiRolesModal" tabindex="-1" role="dialog"
@@ -143,7 +139,7 @@
                     <button class="btn btn-primary w-100 mb-3" id="fetch-roles-btn">
                         <i class="fas fa-robot me-2"></i> Vygenerovat role pomocí AI
                     </button>
-                    <div id="roles-container" style="display: none">
+                    <div id="roles-container" class="uc-hidden">
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i>
                             <strong>Vyberte roli:</strong> AI vygenerovalo tyto role na základě zadaného předmětu.
@@ -282,19 +278,17 @@
                 limitReached = true;
 
                 const continueFooter = document.createElement('div');
-                continueFooter.className = 'chat-footer-continue';
+                continueFooter.className = 'chat-footer-continue uc-footer-continue';
                 continueFooter.innerHTML = `
-                    <button class="btn btn-outline-light btn-m" id="continue-in-new-btn" style="display: inline-flex; align-items: center;"
+                    <button class="btn btn-outline-light btn-m uc-inline-flex-center" id="continue-in-new-btn"
                     title="Pokračovat v novém chatu">
                     <i class="fas fa-play me-2"></i> Pokračovat v novém chatu
                     </button>
                 `;
-                continueFooter.style.display = 'flex';
-                continueFooter.style.justifyContent = 'center';
-                continueFooter.style.padding = '20px';
 
                 if (chat.chatFooter) {
-                    chat.chatFooter.style.display = 'none';
+                    chat.chatFooter.classList.add('uc-hidden');
+                    chat.chatFooter.classList.remove('uc-block');
                 }
 
                 document.querySelector(".chat").appendChild(continueFooter);
@@ -302,19 +296,17 @@
             }
 
             const continueFooter = document.createElement('div');
-            continueFooter.className = 'chat-footer-continue';
+            continueFooter.className = 'chat-footer-continue uc-footer-continue';
             continueFooter.innerHTML = `
-                <button class="btn btn-outline-light btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
+                <button class="btn btn-outline-light btn-m uc-inline-flex-center" id="continue-conversation-btn"
                 title="Pokračovat v konverzaci">
                 <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
                 </button>
             `;
-            continueFooter.style.display = 'flex';
-            continueFooter.style.justifyContent = 'center';
-            continueFooter.style.padding = '20px';
 
             if (chat.chatFooter) {
-                chat.chatFooter.style.display = 'none';
+                chat.chatFooter.classList.add('uc-hidden');
+                chat.chatFooter.classList.remove('uc-block');
             }
 
             document.querySelector(".chat").appendChild(continueFooter);
@@ -332,7 +324,8 @@
 
             $(".chat-footer-continue").remove();
             if (chat.chatFooter) {
-            chat.chatFooter.style.display = 'block';
+            chat.chatFooter.classList.remove('uc-hidden');
+            chat.chatFooter.classList.add('uc-block');
         }
         }).catch((error) => {
             chat.addSystemMessage(`Nepodařilo se obnovit konverzaci: ${error.message}`);
@@ -352,7 +345,8 @@
 
             $(".chat-footer-continue").remove();
             if (chat.chatFooter) {
-            chat.chatFooter.style.display = 'block';
+            chat.chatFooter.classList.remove('uc-hidden');
+            chat.chatFooter.classList.add('uc-block');
         }
         }).catch((error) => {
             chat.addSystemMessage(`Nepodařilo se obnovit konverzaci: ${error.message}`);
@@ -395,6 +389,22 @@
     const customRoleName = document.getElementById("custom-role-name");
     const customRoleBrief = document.getElementById("custom-role-brief") || { value: "" };
     const flagAlert = document.getElementById("flag-alert");
+
+    function setElementVisibility(el, isVisible, mode = "block") {
+        if (!el) return;
+        el.classList.toggle("uc-hidden", !isVisible);
+        if (!isVisible) {
+            el.classList.remove("uc-block", "uc-flex");
+            return;
+        }
+        if (mode === "flex") {
+            el.classList.add("uc-flex");
+            el.classList.remove("uc-block");
+            return;
+        }
+        el.classList.add("uc-block");
+        el.classList.remove("uc-flex");
+    }
 
     // ── Event listeners ──────────────────────────────────
     if (fetchRolesBtn) {
@@ -493,16 +503,16 @@
             customCharCounter.textContent = `${len}/1500 znaků`;
             if (len >= 1500) {
                 customCharCounter.className = "text-danger font-weight-bold mt-1";
-                customInstructions.style.borderColor = "#dc3545";
+                customInstructions.classList.add("uc-input-error");
             } else if (len > 1200) {
                 customCharCounter.className = "text-danger mt-1";
-                customInstructions.style.borderColor = "";
+                customInstructions.classList.remove("uc-input-error");
             } else if (len > 900) {
                 customCharCounter.className = "text-warning mt-1";
-                customInstructions.style.borderColor = "";
+                customInstructions.classList.remove("uc-input-error");
             } else {
                 customCharCounter.className = "text-muted mt-1";
-                customInstructions.style.borderColor = "";
+                customInstructions.classList.remove("uc-input-error");
             }
         });
     }
@@ -658,12 +668,12 @@
         chat.clear();
         chat.hide();
         chat.setInputEnabled(true);
-        if (chat.msgInput) { chat.msgInput.value = ""; chat.msgInput.style.height = "50px"; }
+        if (chat.msgInput) { chat.msgInput.value = ""; }
 
         setLiveChatHeader('');
         if (startCustomChatBtnSidebar) startCustomChatBtnSidebar.disabled = false;
         if (subjectInput) subjectInput.value = "";
-        if (rolesContainer) rolesContainer.style.display = "none";
+        setElementVisibility(rolesContainer, false);
     }
 
     // ── Fetch AI roles ──────────────────────────────────
@@ -701,7 +711,7 @@
                 roleSelect.appendChild(opt);
             });
 
-            rolesContainer.style.display = "block";
+            setElementVisibility(rolesContainer, true, "block");
         } catch (error) {
             alert(`Nepodařilo se načíst role: ${error.message}`);
         } finally {
@@ -756,14 +766,14 @@
                 if (!response.ok) throw new Error(result.error || `Chyba serveru: ${response.status}`);
 
                 flagAlert.textContent = result.message || "Zpráva úspěšně nahlášena!";
-                flagAlert.className = "alert alert-success";
-                flagAlert.style.display = "block";
-                setTimeout(() => (flagAlert.style.display = "none"), 3000);
+                flagAlert.className = "alert alert-success roleplay-flag-alert";
+                setElementVisibility(flagAlert, true);
+                setTimeout(() => setElementVisibility(flagAlert, false), 3000);
             } catch (error) {
                 flagAlert.textContent = `Nepodařilo se nahlásit zprávu: ${error.message}`;
-                flagAlert.className = "alert alert-danger";
-                flagAlert.style.display = "block";
-                setTimeout(() => (flagAlert.style.display = "none"), 5000);
+                flagAlert.className = "alert alert-danger roleplay-flag-alert";
+                setElementVisibility(flagAlert, true);
+                setTimeout(() => setElementVisibility(flagAlert, false), 5000);
             } finally {
                 $("#flagSummaryModal").modal("hide");
                 currentFlagData = null;

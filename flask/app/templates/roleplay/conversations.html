@@ -2,8 +2,11 @@
 
 {% block title %}Moje konverzace - EDU AI Chat{% endblock %}
 
-{% block content %}
+{% block styles %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/unified-chat.css') }}">
+{% endblock %}
+
+{% block content %}
 <body>
     <div class="layout">
         <div class="content">
@@ -42,7 +45,7 @@
                                 <li data-session-id="{{ session_data.session.id }}" 
                                     class="list-group-item conversation-item">
                                     <figure class="avatar">
-                                        <span class="avatar-title rounded-circle" style="background-color: #0a80ff">
+                                        <span class="avatar-title rounded-circle uc-avatar-user">
                                             <i class="fas fa-user"></i>
                                         </span>
                                     </figure>
@@ -127,7 +130,7 @@
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-danger" id="deleteFlagBtn" style="display: none; margin-right: auto;">
+                    <button type="button" class="btn btn-danger mr-auto uc-hidden" id="deleteFlagBtn">
                         <i class="fas fa-trash me-2"></i> Odstranit označení
                     </button>
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Zrušit</button>
@@ -185,7 +188,7 @@
                 $('#flagMode').val('create');
                 $('#flagMessageModalLabel').text('Označit zprávu');
                 $('#confirmFlagBtn').html('<i class="fas fa-flag me-2"></i> Označit');
-                $('#deleteFlagBtn').hide();
+                $('#deleteFlagBtn').addClass('uc-hidden');
                 $('#flagSessionId').val(sessionId);
                 $('#flagContent').val(content);
                 $('#flagSummary').val('');
@@ -205,7 +208,7 @@
                 $('#flagMode').val('edit');
                 $('#flagMessageModalLabel').text('Upravit označení');
                 $('#confirmFlagBtn').html('<i class="fas fa-save me-2"></i> Uložit změny');
-                $('#deleteFlagBtn').show();
+                $('#deleteFlagBtn').removeClass('uc-hidden');
                 $('#flagSessionId').val(sessionId);
                 $('#flagContent').val(content);
                 $('#flagSummary').val(flagInfo.summary || '');
@@ -233,11 +236,11 @@
                     if (canReuseInstructions) {
                         continueFooter.innerHTML = `
                             <div class="text-center">
-                                <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
+                                <button class="btn btn-secondary btn-m uc-inline-flex-center" disabled>
                                     <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
                                 </button>
                                 <p class="text-muted small mt-2 mb-2">Tato konverzace dosáhla maximálního počtu deseti odpovědí AI.</p>
-                                <button class="btn btn-outline-light btn-m" id="reuse-in-index-btn" style="display: inline-flex; align-items: center;">
+                                <button class="btn btn-outline-light btn-m uc-inline-flex-center" id="reuse-in-index-btn">
                                     <i class="fas fa-plus me-2"></i> Nový chat se stejnými instrukcemi
                                 </button>
                             </div>
@@ -245,19 +248,18 @@
                     } else {
                         continueFooter.innerHTML = `
                             <div class="text-center">
-                                <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
+                                <button class="btn btn-secondary btn-m uc-inline-flex-center" disabled>
                                     <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
                                 </button>
                                 <p class="text-muted small mt-2 mb-0">Tato konverzace dosáhla maximálního počtu deseti odpovědí AI.</p>
                             </div>
                         `;
                     }
-                    continueFooter.style.display = 'flex';
-                    continueFooter.style.justifyContent = 'center';
-                    continueFooter.style.padding = '20px';
+                    continueFooter.classList.add('uc-footer-continue');
 
                     if (chat.chatFooter) {
-                        chat.chatFooter.style.display = 'none';
+                        chat.chatFooter.classList.add('uc-hidden');
+                        chat.chatFooter.classList.remove('uc-block');
                     }
 
                     document.querySelector(".chat").appendChild(continueFooter);
@@ -265,19 +267,17 @@
                 }
 
                 const continueFooter = document.createElement('div');
-                continueFooter.className = 'chat-footer-continue';
+                continueFooter.className = 'chat-footer-continue uc-footer-continue';
                 continueFooter.innerHTML = `
-                    <button class="btn btn-outline-light btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
+                    <button class="btn btn-outline-light btn-m uc-inline-flex-center" id="continue-conversation-btn"
                     title="Pokračovat v konverzaci">
                     <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
                     </button>
                 `;
-                continueFooter.style.display = 'flex';
-                continueFooter.style.justifyContent = 'center';
-                continueFooter.style.padding = '20px';
 
                 if (chat.chatFooter) {
-                    chat.chatFooter.style.display = 'none';
+                    chat.chatFooter.classList.add('uc-hidden');
+                    chat.chatFooter.classList.remove('uc-block');
                 }
 
                 document.querySelector(".chat").appendChild(continueFooter);
@@ -322,7 +322,7 @@
                         <i class="fas fa-arrow-left"></i>
                     </a>
                     <figure class="avatar">
-                        <span class="avatar-title rounded-circle" style="background-color: #0a80ff">
+                        <span class="avatar-title rounded-circle uc-avatar-user">
                             <i class="fas fa-user"></i>
                         </span>
                     </figure>
@@ -337,15 +337,15 @@
             const canReuseInstructions = !!(sessionData.is_posted_by_user || sessionData.is_public);
 
             const continueFooter = document.createElement('div');
-            continueFooter.className = 'chat-footer-continue';
+            continueFooter.className = 'chat-footer-continue uc-footer-continue';
             if (assistantCount >= MAX_AI_RESPONSES && canReuseInstructions) {
                 continueFooter.innerHTML = `
                     <div class="text-center">
-                        <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
+                        <button class="btn btn-secondary btn-m uc-inline-flex-center" disabled>
                             <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
                         </button>
                         <p class="text-muted small mt-2 mb-2">Tato konverzace dosáhla maximálního počtu deseti odpovědí AI.</p>
-                        <button class="btn btn-outline-light btn-m" id="reuse-in-index-btn" style="display: inline-flex; align-items: center;">
+                        <button class="btn btn-outline-light btn-m uc-inline-flex-center" id="reuse-in-index-btn">
                             <i class="fas fa-plus me-2"></i> Nový chat se stejnými instrukcemi
                         </button>
                     </div>
@@ -354,7 +354,7 @@
                 if (assistantCount >= MAX_AI_RESPONSES) {
                     continueFooter.innerHTML = `
                         <div class="text-center">
-                            <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
+                            <button class="btn btn-secondary btn-m uc-inline-flex-center" disabled>
                                 <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
                             </button>
                             <p class="text-muted small mt-2 mb-0">Tato konverzace dosáhla maximálního počtu deseti odpovědí AI.</p>
@@ -362,7 +362,7 @@
                     `;
                 } else {
                     continueFooter.innerHTML = `
-                        <button class="btn btn-outline-light btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
+                        <button class="btn btn-outline-light btn-m uc-inline-flex-center" id="continue-conversation-btn"
                         title="Pokračovat v konverzaci">
                         <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
                         </button>
@@ -375,7 +375,7 @@
                             <div class="alert alert-info mb-2" role="alert">
                                 Tato konverzace je pouze pro čtení.
                             </div>
-                            <button class="btn btn-outline-light btn-m" id="reuse-in-index-btn" style="display: inline-flex; align-items: center;">
+                            <button class="btn btn-outline-light btn-m uc-inline-flex-center" id="reuse-in-index-btn">
                                 <i class="fas fa-plus me-2"></i> Nový chat se stejnými instrukcemi
                             </button>
                         </div>
@@ -388,10 +388,6 @@
                     `;
                 }
             }
-            continueFooter.style.display = 'flex';
-            continueFooter.style.justifyContent = 'center';
-            continueFooter.style.padding = '20px';
-
             // Load history via unified component
             chat.loadHistory(sessionData.chat_history, currentFlaggedInfo);
 
@@ -400,7 +396,8 @@
             // Show chat and continue button, hide regular footer
             chat.show();
             if (chat.chatFooter) {
-                chat.chatFooter.style.display = 'none';
+                chat.chatFooter.classList.add('uc-hidden');
+                chat.chatFooter.classList.remove('uc-block');
             }
 
             document.querySelector(".chat").appendChild(continueFooter);
@@ -458,7 +455,10 @@
             chat.hide();
             chat.clear();
             chat.readOnly = true;
-            if (chat.chatFooter) chat.chatFooter.style.display = 'none';
+            if (chat.chatFooter) {
+                chat.chatFooter.classList.add('uc-hidden');
+                chat.chatFooter.classList.remove('uc-block');
+            }
             $('.conversation-item').removeClass('open-chat');
             currentSessionId = null;
             if ($(window).width() < 1200) {
@@ -583,25 +583,4 @@
     });
 
 </script>
-
-<style>
-    /* Prevent date/action overlap in conversation list */
-    .conversation-item .users-list-body > div:first-child {
-        padding-right: 10px; /* Small gap between text and action area */
-        max-width: calc(100% - 90px); /* Reserve space for date/badge */
-    }
-    
-    .conversation-item .users-list-body .users-list-action {
-        min-width: 85px; /* Minimum width for action area */
-        max-width: 85px; /* Fixed width to prevent expansion */
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 4px;
-    }
-    
-    .conversation-item .users-list-body .users-list-action small {
-        white-space: nowrap;
-    }
-</style>
 {% endblock %}
