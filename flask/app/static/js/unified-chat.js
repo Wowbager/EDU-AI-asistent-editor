@@ -282,7 +282,8 @@ class UnifiedChat {
      * @param {Object}  [options.flagInfo=null]
      * @param {string}  [options.sessionId]
      * @param {boolean} [options.isPublic=false]
-     * @param {boolean} [options.showFlagButton=true]
+    * @param {boolean} [options.showFlagButton=true]
+    * @param {number|null} [options.messageIndex=null]
      * @returns {HTMLElement|null}
      */
     addMessage(role, content, options = {}) {
@@ -298,9 +299,12 @@ class UnifiedChat {
             sessionId = this.sessionId,
             isPublic = false,
             showFlagButton = true,
+            messageIndex: providedMessageIndex = null,
         } = options;
 
-        const messageIndex = isAssistant ? this.assistantMessageCount : null;
+        const messageIndex = isAssistant
+            ? (Number.isInteger(providedMessageIndex) ? providedMessageIndex : this.assistantMessageCount)
+            : null;
 
         // --- Build message-item element ---
         const messageItem = document.createElement('div');
@@ -371,7 +375,7 @@ class UnifiedChat {
                 btn.innerHTML = '<i class="fas fa-flag me-2"></i> Označeno';
                 btn.title = 'Upravit označení';
                 btn.addEventListener('click', () => {
-                    if (this.onUnflag) this.onUnflag(sessionId, content, flagInfo);
+                    if (this.onUnflag) this.onUnflag(sessionId, content, flagInfo, messageIndex);
                 });
                 actionsDiv.appendChild(btn);
             } else {
@@ -380,7 +384,7 @@ class UnifiedChat {
                 btn.innerHTML = '<i class="far fa-flag me-2"></i> Označit';
                 btn.title = 'Označit tuto zprávu';
                 btn.addEventListener('click', () => {
-                    if (this.onFlag) this.onFlag(sessionId, content, messageIndex);
+                    if (this.onFlag) this.onFlag(sessionId, content, messageIndex, flagInfo);
                 });
                 actionsDiv.appendChild(btn);
             }
@@ -448,14 +452,44 @@ class UnifiedChat {
             return;
         }
 
+        const flagsByIndex = new Map();
+        const flagsByContent = new Map();
+        const usedFlagIds = new Set();
+
+        (Array.isArray(flaggedMessages) ? flaggedMessages : []).forEach((flag) => {
+            if (flag && Number.isInteger(flag.message_index)) {
+                flagsByIndex.set(flag.message_index, flag);
+            }
+
+            if (flag && typeof flag.content === 'string') {
+                const existing = flagsByContent.get(flag.content) || [];
+                existing.push(flag);
+                flagsByContent.set(flag.content, existing);
+            }
+        });
+
+        let assistantMessageIndex = 0;
+
         messages.forEach((msg) => {
             if (msg.role === 'system') return;
 
-            const isFlagged = flaggedContentSet.includes(msg.content);
             let flagInfo = null;
-            if (isFlagged && flaggedMessages) {
-                flagInfo = flaggedMessages.find(f => f.content === msg.content);
+            if (msg.role === 'assistant') {
+                if (flagsByIndex.has(assistantMessageIndex)) {
+                    flagInfo = flagsByIndex.get(assistantMessageIndex);
+                    if (flagInfo.id) usedFlagIds.add(flagInfo.id);
+                } else if (flagsByContent.has(msg.content)) {
+                    const matches = flagsByContent.get(msg.content);
+                    flagInfo = matches.find((f) => !f.id || !usedFlagIds.has(f.id)) || null;
+                    if (flagInfo && flagInfo.id) usedFlagIds.add(flagInfo.id);
+                }
+
+                if (!flagInfo && flaggedContentSet.includes(msg.content)) {
+                    flagInfo = { content: msg.content, message_index: assistantMessageIndex };
+                }
             }
+
+            const isFlagged = !!flagInfo;
 
             this.addMessage(msg.role, msg.content, {
                 timestamp: msg.timestamp,
@@ -463,7 +497,12 @@ class UnifiedChat {
                 flagInfo,
                 isPublic,
                 showFlagButton: isPostedByUser,
+                messageIndex: msg.role === 'assistant' ? assistantMessageIndex : null,
             });
+
+            if (msg.role === 'assistant') {
+                assistantMessageIndex++;
+            }
         });
 
         const flaggedEl = this.chatMessages.querySelector('.uc-flag-reason');

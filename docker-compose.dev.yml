@@ -12,7 +12,8 @@ services:
       - ./flask:/app
       - ./config/ai_config.json:/opt/edu-ai/ai_config.json:ro
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     networks:
       - web
       - internal
@@ -34,6 +35,12 @@ services:
     volumes:
       - mysql_data_dev:/var/lib/mysql
       - ./my.cnf:/etc/mysql/my.cnf
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
 
   redis:
     image: redis:6.2
@@ -166,8 +173,10 @@ services:
       - web
       - internal
     depends_on:
-      - redis
-      - mysql
+      redis:
+        condition: service_started
+      mysql:
+        condition: service_healthy
     ports:
       - "7070:80"
 

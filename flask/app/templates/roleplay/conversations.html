@@ -122,6 +122,7 @@
                         <input type="hidden" id="flagSessionId">
                         <input type="hidden" id="flagContent">
                         <input type="hidden" id="flagId">
+                        <input type="hidden" id="flagMessageIndex">
                         <input type="hidden" id="flagMode" value="create">
                     </form>
                 </div>
@@ -155,7 +156,19 @@
         const MAX_AI_RESPONSES = {{ max_ai_responses }};
         const ROLEPLAY_HOME_URL = "{{ url_for('roleplay.roleplay_home') }}";
         let currentSessionId = null;
+        let currentSessionData = null;
+        let currentFlaggedInfo = null;
         let limitReached = false;
+
+        function buildFlaggedInfo(sessionData) {
+            return {
+                flaggedContentSet: Array.isArray(sessionData.flagged_content_set) ? sessionData.flagged_content_set : [],
+                flaggedMessages: Array.isArray(sessionData.flagged_messages) ? sessionData.flagged_messages : [],
+                isPublic: !!sessionData.is_public,
+                isPostedByUser: !!sessionData.is_posted_by_user,
+                scrollToFlagged: !!sessionData.is_public,
+            };
+        }
 
         // ── Initialise the unified chat component ────────────
         const chat = new UnifiedChat({
@@ -164,7 +177,7 @@
             maxMessageLength: 500,
 
             // Flag button callback → open the flag modal
-            onFlag: function (sessionId, content, _messageIndex) {
+            onFlag: function (sessionId, content, messageIndex) {
                 if (!content) {
                     alert('Nelze označit prázdnou zprávu.');
                     return;
@@ -179,11 +192,12 @@
                 $('#flagTeamId').val('');
                 $('#flagIsPublic').prop('checked', false);
                 $('#flagId').val('');
+                $('#flagMessageIndex').val(Number.isInteger(messageIndex) ? String(messageIndex) : '');
                 $('#flagMessageModal').modal('show');
             },
 
             // Unflag / edit button callback → open modal prefilled
-            onUnflag: function (sessionId, content, flagInfo) {
+            onUnflag: function (sessionId, content, flagInfo, messageIndex) {
                 if (!flagInfo) {
                     alert('Informace o označení nebyly nalezeny.');
                     return;
@@ -198,6 +212,10 @@
                 $('#flagTeamId').val(flagInfo.team_id || '');
                 $('#flagId').val(flagInfo.id);
                 $('#flagIsPublic').prop('checked', flagInfo.is_public || false);
+                const resolvedIndex = Number.isInteger(flagInfo.message_index)
+                    ? flagInfo.message_index
+                    : (Number.isInteger(messageIndex) ? messageIndex : null);
+                $('#flagMessageIndex').val(Number.isInteger(resolvedIndex) ? String(resolvedIndex) : '');
                 $('#flagMessageModal').modal('show');
             },
             onDisconnected: function (event) {
@@ -288,6 +306,8 @@
 
             const sessionData = sessionsData.find(s => s.session.id === sessionId);
             if (!sessionData) return;
+            currentSessionData = sessionData;
+            currentFlaggedInfo = buildFlaggedInfo(sessionData);
 
             // Highlight active item
             $('.conversation-item').removeClass('open-chat');
@@ -373,13 +393,7 @@
             continueFooter.style.padding = '20px';
 
             // Load history via unified component
-            chat.loadHistory(sessionData.chat_history, {
-                flaggedContentSet: sessionData.flagged_content_set || [],
-                flaggedMessages:   sessionData.flagged_messages   || [],
-                isPublic:          sessionData.is_public          || false,
-                isPostedByUser:    sessionData.is_posted_by_user || false,
-                scrollToFlagged:   sessionData.is_public || false, // Scroll to flagged message if conversation is public
-            });
+            chat.loadHistory(sessionData.chat_history, currentFlaggedInfo);
 
             chat.readOnly = !sessionData.is_posted_by_user;
 
@@ -413,7 +427,7 @@
                 if (!response.ok) throw new Error(payload.detail || payload.error || `Server error: ${response.status}`);
 
                 if (Array.isArray(payload.conversation_history)) {
-                    chat.loadHistory(payload.conversation_history);
+                    chat.loadHistory(payload.conversation_history, currentFlaggedInfo || buildFlaggedInfo(currentSessionData || {}));
                 }
 
                 await chat.connect(payload.session_id);
@@ -482,6 +496,9 @@
             const teamId  = $('#flagTeamId').val() || null;
             const isPublic = $('#flagIsPublic').is(':checked');
             const flagId  = $('#flagId').val();
+            const messageIndexRaw = $('#flagMessageIndex').val();
+            const parsedMessageIndex = Number.parseInt(messageIndexRaw, 10);
+            const messageIndex = Number.isNaN(parsedMessageIndex) ? null : parsedMessageIndex;
 
             if (!summary) {
                 alert('Prosím, zadejte popis úlovku.');
@@ -504,7 +521,7 @@
                 fetch('{{ url_for("roleplay.flag_response") }}', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId, flagged_content: content, summary, team_id: teamId, is_public: isPublic })
+                    body: JSON.stringify({ session_id: sessionId, flagged_content: content, summary, team_id: teamId, is_public: isPublic, message_index: messageIndex })
                 })
                 .then(r => r.json())
                 .then(data => {
@@ -519,10 +536,16 @@
         $('#deleteFlagBtn').on('click', function () {
             if (!confirm('Opravdu chcete odstranit toto označení?')) return;
 
+            const payload = {
+                flagged_id: $('#flagId').val() || null,
+                session_id: $('#flagSessionId').val(),
+                content: $('#flagContent').val()
+            };
+
             fetch('{{ url_for("roleplay.unflag_message") }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: $('#flagSessionId').val(), content: $('#flagContent').val() })
+                body: JSON.stringify(payload)
             })
             .then(r => r.json())
             .then(data => {

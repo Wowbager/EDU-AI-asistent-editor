@@ -382,6 +382,9 @@ def conversations():
                     'id': flagged.id,
                     'content': flagged.content,
                     'summary': flagged.summary,
+                    'is_public': flagged.is_public,
+                    'team_id': flagged.team_id,
+                    'message_index': flagged.message_index,
                     'timestamp': flagged.timestamp.isoformat() if flagged.timestamp else None,
                 }
                 for flagged in data['flags']
@@ -536,7 +539,17 @@ def conversations():
             },
             'message_count': len(chat_history),
             'chat_history': chat_history,
-            'flagged_messages': [{'id': f.id, 'content': f.content, 'summary': f.summary, 'is_public': f.is_public, 'team_id': f.team_id} for f in flagged_messages],
+            'flagged_messages': [
+                {
+                    'id': f.id,
+                    'content': f.content,
+                    'summary': f.summary,
+                    'is_public': f.is_public,
+                    'team_id': f.team_id,
+                    'message_index': f.message_index,
+                }
+                for f in flagged_messages
+            ],
             'flagged_content_set': flagged_content_list,
             'is_posted_by_user': session.user_id == current_user.id if session else False
         })
@@ -1123,6 +1136,7 @@ def flag_response():
         {
             "session_id": UUID,
             "flagged_content": string,
+            "message_index": integer (optional),
             "summary": string (optional),
             "team_id": integer (optional),
             "is_public": boolean (optional)
@@ -1141,6 +1155,7 @@ def flag_response():
     
     session_id = data.get("session_id")
     flagged_content = data.get("flagged_content")
+    message_index = data.get("message_index")
     summary = data.get("summary")
     team_id = data.get("team_id")
     is_public = data.get("is_public", False)
@@ -1150,6 +1165,14 @@ def flag_response():
     
     if not flagged_content:
         return jsonify({"error": "Chybějící flagged_content."}), 400
+
+    if message_index in ("", None):
+        message_index = None
+    else:
+        try:
+            message_index = int(message_index)
+        except (ValueError, TypeError):
+            return jsonify({"error": "message_index musí být celé číslo."}), 400
     
     try:
         chat_session = ChatSession.query.get(session_id)
@@ -1169,6 +1192,7 @@ def flag_response():
             user_id=current_user.id,
             session_id=session_id,
             content=flagged_content,
+            message_index=message_index,
             summary=summary or "Úspěšně nachytaný AI asistent",
             team_id=team_id,
             is_public=is_public,
@@ -1197,25 +1221,34 @@ def unflag_message():
     Remove a flagged message from the user's flagged collection.
     
     JSON Body:
+        flagged_id: The flagged response ID (preferred)
         session_id: The session ID
-        content: The content of the message to unflag
+        content: The content of the message to unflag (fallback for legacy records)
     
     Returns:
         JSON response with success status
     """
-    data = request.get_json()
+    data = request.get_json() or {}
+    flagged_id = data.get('flagged_id')
     session_id = data.get('session_id')
     content = data.get('content')
-    
-    if not session_id or not content:
-        return jsonify({'success': False, 'error': 'Missing session_id or content'}), 400
-    
-    # Find and delete the flagged response
-    flagged = FlaggedResponse.query.filter_by(
-        session_id=session_id,
-        user_id=current_user.id,
-        content=content
-    ).first()
+
+    flagged = None
+    if flagged_id:
+        flagged = FlaggedResponse.query.filter_by(
+            id=flagged_id,
+            user_id=current_user.id,
+        ).first()
+    else:
+        if not session_id or not content:
+            return jsonify({'success': False, 'error': 'Missing flagged_id or session_id/content'}), 400
+
+        # Legacy fallback: identify by session + content
+        flagged = FlaggedResponse.query.filter_by(
+            session_id=session_id,
+            user_id=current_user.id,
+            content=content
+        ).first()
     
     if not flagged:
         return jsonify({'success': False, 'error': 'Flagged message not found'}), 404

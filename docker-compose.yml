@@ -12,14 +12,15 @@ services:
     environment:
       AI_CONFIG_PATH: /opt/edu-ai/ai_config.json
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     links:
       - mysql
     networks:
       - web
       - internal
     ports:
-      - "${APP_PORT}:${APP_PORT}"
+      - "${APP_PORT}:8000"
     command: gunicorn -w 16 -b :8000 app:app
 
   mysql:
@@ -32,6 +33,12 @@ services:
     volumes:
       - ./mysql_data:/var/lib/mysql
       - ./my.cnf:/etc/mysql/my.cnf
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -216,8 +223,10 @@ services:
       - web
       - internal
     depends_on:
-      - redis
-      - mysql
+      redis:
+        condition: service_started
+      mysql:
+        condition: service_healthy
     ports:
       - "7070:80"
   
