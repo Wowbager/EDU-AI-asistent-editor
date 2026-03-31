@@ -122,7 +122,7 @@ class UnifiedChat {
         if (!this.readOnly) {
             this._bindInputEvents();
         } else if (this.chatFooter) {
-            this._setElementVisible(this.chatFooter, false);
+            this.chatFooter.style.display = 'none';
         }
 
         // Expose backward-compatible globals
@@ -152,24 +152,6 @@ class UnifiedChat {
         }
     }
 
-    _setElementVisible(el, isVisible, mode = 'block') {
-        if (!el) return;
-        el.classList.toggle('uc-hidden', !isVisible);
-        if (!isVisible) {
-            el.classList.remove('uc-block', 'uc-flex');
-            return;
-        }
-
-        if (mode === 'flex') {
-            el.classList.add('uc-flex');
-            el.classList.remove('uc-block');
-            return;
-        }
-
-        el.classList.add('uc-block');
-        el.classList.remove('uc-flex');
-    }
-
     _updateCharCounter() {
         if (!this.msgInput || !this.charCounter) return;
         const len = this.msgInput.value.length;
@@ -178,16 +160,16 @@ class UnifiedChat {
 
         if (len >= max) {
             this.charCounter.className = 'uc-char-counter text-danger font-weight-bold mt-1 text-end';
-            this.msgInput.classList.add('uc-input-error');
+            this.msgInput.style.borderColor = '#dc3545';
         } else if (len > max * 0.8) {
             this.charCounter.className = 'uc-char-counter text-danger mt-1 text-end';
-            this.msgInput.classList.remove('uc-input-error');
+            this.msgInput.style.borderColor = '';
         } else if (len > max * 0.6) {
             this.charCounter.className = 'uc-char-counter text-warning mt-1 text-end';
-            this.msgInput.classList.remove('uc-input-error');
+            this.msgInput.style.borderColor = '';
         } else {
             this.charCounter.className = 'uc-char-counter text-muted small mt-1 text-end';
-            this.msgInput.classList.remove('uc-input-error');
+            this.msgInput.style.borderColor = '';
         }
 
         if (this.sendBtn) {
@@ -198,6 +180,7 @@ class UnifiedChat {
     _clearInput() {
         if (!this.msgInput) return;
         this.msgInput.value = '';
+        this.msgInput.style.height = '50px';
         this._updateCharCounter();
         this.msgInput.focus();
     }
@@ -239,17 +222,17 @@ class UnifiedChat {
     /** Show the chat area (hide placeholder, show body + footer). */
     show() {
         this.container.classList.add('open');
-        this._setElementVisible(this.chatPlaceholder, false);
-        this._setElementVisible(this.chatBody, true, 'block');
-        this._setElementVisible(this.chatFooter, !this.readOnly, 'block');
+        if (this.chatPlaceholder) this.chatPlaceholder.style.display = 'none';
+        if (this.chatBody) this.chatBody.style.display = 'block';
+        if (this.chatFooter && !this.readOnly) this.chatFooter.style.display = 'block';
     }
 
     /** Hide the chat area (show placeholder, hide body + footer). */
     hide() {
         this.container.classList.remove('open');
-        this._setElementVisible(this.chatPlaceholder, true, 'flex');
-        this._setElementVisible(this.chatBody, false);
-        this._setElementVisible(this.chatFooter, false);
+        if (this.chatPlaceholder) this.chatPlaceholder.style.display = 'flex';
+        if (this.chatBody) this.chatBody.style.display = 'none';
+        if (this.chatFooter) this.chatFooter.style.display = 'none';
         if (this.chatHeader) this.chatHeader.innerHTML = '';
     }
 
@@ -280,7 +263,7 @@ class UnifiedChat {
     /** Switch from read-only to live input mode. */
     enableLiveMode() {
         this.readOnly = false;
-        this._setElementVisible(this.chatFooter, true, 'block');
+        if (this.chatFooter) this.chatFooter.style.display = 'block';
         this._bindInputEvents();
     }
 
@@ -334,7 +317,8 @@ class UnifiedChat {
         const figure = document.createElement('figure');
         figure.className = 'avatar';
         const avatarSpan = document.createElement('span');
-        avatarSpan.className = `avatar-title rounded-circle ${isUser ? 'uc-avatar-user' : 'uc-avatar-assistant'}`;
+        avatarSpan.className = 'avatar-title rounded-circle';
+        avatarSpan.style.backgroundColor = isUser ? '#0a80ff' : '#17a2b8';
         avatarSpan.innerHTML = isUser
             ? '<i class="fas fa-user"></i>'
             : '<i class="fas fa-robot"></i>';
@@ -375,6 +359,7 @@ class UnifiedChat {
         if (isPublic && flagInfo && flagInfo.summary) {
             const badge = document.createElement('div');
             badge.className = 'alert alert-warning mt-2 mb-0 uc-flag-reason';
+            badge.style.padding = '0.5rem 0.75rem';
             badge.innerHTML = `<small><strong><i class="fas fa-flag me-2"></i>Důvod označení:</strong> ${this._escapeHtml(flagInfo.summary)}</small>`;
             contentDiv.appendChild(badge);
         }
@@ -558,6 +543,7 @@ class UnifiedChat {
         // Clear input (only if we read from the textarea)
         if (!text && this.msgInput) {
             this.msgInput.value = '';
+            this.msgInput.style.height = '50px';
             this._updateCharCounter();
         }
 
@@ -756,7 +742,8 @@ class UnifiedChat {
         const figure = document.createElement('figure');
         figure.className = 'avatar';
         const avatarSpan = document.createElement('span');
-        avatarSpan.className = 'avatar-title rounded-circle uc-avatar-assistant';
+        avatarSpan.className = 'avatar-title rounded-circle';
+        avatarSpan.style.backgroundColor = '#17a2b8';
         avatarSpan.innerHTML = '<i class="fas fa-robot"></i>';
         figure.appendChild(avatarSpan);
         avatarRow.appendChild(figure);
@@ -772,7 +759,9 @@ class UnifiedChat {
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
         this._streamingBubble = document.createElement('p');
-        this._streamingBubble.className = 'uc-streaming-text';
+        this._streamingBubble.style.whiteSpace = 'pre-wrap';
+        this._streamingBubble.style.wordBreak = 'break-word';
+        this._streamingBubble.style.marginBottom = '0';
         contentDiv.appendChild(this._streamingBubble);
         this._streamingContainer.appendChild(contentDiv);
 

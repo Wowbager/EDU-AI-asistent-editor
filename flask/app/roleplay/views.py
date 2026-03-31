@@ -15,10 +15,11 @@ from sqlalchemy import func
 # Import utility functions and config from within roleplay module
 from .chat_utils import (
     get_chat_history,
+    save_chat_history,
+    get_role_by_id,
     generate_roles_from_subject,
     generate_role_instructions_preview,
-    generate_session_id_for_roleplay_chat,
-    delete_roleplay_session_bootstrap,
+    generate_session_id_for_roleplay_chat
 )
 from .ai_prompts import (
     prepare_session_prompt,
@@ -1942,7 +1943,6 @@ def generate_session_id():
         app.logger.info(f"Created chat session {session_id} for user {current_user.id}")
     except Exception as e:
         db.session.rollback()
-        delete_roleplay_session_bootstrap(session_id)
         app.logger.error(f"Error creating chat session: {str(e)}")
         return jsonify({"error": "Chyba při vytváření relace chatu"}), 500
     

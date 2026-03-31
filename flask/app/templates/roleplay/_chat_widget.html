@@ -4,12 +4,12 @@
     <div class="chat-header uc-header"></div>
 
     {# ── Message body (hidden until chat is opened) ───────── #}
-    <div class="chat-body uc-body uc-hidden">
+    <div class="chat-body uc-body" style="display: none;">
         <div class="messages uc-messages"></div>
     </div>
 
     {# ── Placeholder (visible when no chat is selected) ──── #}
-    <div class="chat-body no-message uc-placeholder uc-flex">
+    <div class="chat-body no-message uc-placeholder" style="display: flex;">
         <div class="no-message-container">
             <div class="row my-5">
                 <div class="col-md-4 offset-4">
@@ -27,7 +27,7 @@
 
     {# ── Footer / input area ─────────────────────────────── #}
     {% if not uc_readonly %}
-    <div class="chat-footer uc-footer uc-hidden">
+    <div class="chat-footer uc-footer" style="display: none;">
         <div class="uc-input-group">
             <textarea
                 class="form-control uc-msg-input"
@@ -46,7 +46,7 @@
         <div class="uc-char-counter text-muted small mt-1 text-end">
             0/500 znaků
         </div>
-        <div class="uc-processing-indicator text-center mt-2 uc-hidden">
+        <div class="uc-processing-indicator text-center mt-2" style="display: none;">
             <div class="spinner-border spinner-border-sm text-primary" role="status">
                 <span class="sr-only">Loading...</span>
             </div>
