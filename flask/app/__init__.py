@@ -7,6 +7,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_mail import Mail
 from flask_cors import CORS
+from authlib.integrations.flask_client import OAuth
 import logging  # Added import
 from werkzeug.middleware.proxy_fix import ProxyFix  # Added import
 import re  # Added import for regular expressions
@@ -114,20 +115,66 @@ def truncate(s, length=255, end='...'):
 
 app.logger.info("Flask app initialized and basic logging configured.")
 
+
+def _clean_env(value, default=""):
+    if value is None:
+        return default
+    return str(value).strip().strip('"').strip("'")
+
+
+def _env_bool(name, default=False):
+    raw = _clean_env(os.environ.get(name, ""))
+    if not raw:
+        return default
+    return raw.lower() in {"1", "true", "yes", "on"}
+
+
+mail_server = _clean_env(os.environ.get("MAIL_SERVER", ""))
+if mail_server == "smtp-relay.google.com":
+    app.logger.warning("MAIL_SERVER=smtp-relay.google.com is not resolvable in this environment, switching to smtp-relay.gmail.com")
+    mail_server = "smtp-relay.gmail.com"
+
+mail_port_raw = _clean_env(os.environ.get("MAIL_PORT", 465), "465")
+try:
+    mail_port = int(mail_port_raw)
+except (TypeError, ValueError):
+    app.logger.warning("Invalid MAIL_PORT=%s, defaulting to 465", mail_port_raw)
+    mail_port = 465
+
 mail_settings = {
-    "MAIL_SERVER": os.environ.get("MAIL_SERVER", ""),
-    "MAIL_PORT": os.environ.get("MAIL_PORT", 465),
-    "MAIL_USE_TLS": False,
-    "MAIL_USE_SSL": True,
-    "MAIL_FROM": os.environ.get("MAIL_FROM", ""),
-    "MAIL_USERNAME": os.environ.get("MAIL_USERNAME", ""),
-    "MAIL_PASSWORD": os.environ.get("MAIL_PASSWORD", ""),
+    "MAIL_SERVER": mail_server,
+    "MAIL_PORT": mail_port,
+    "MAIL_USE_TLS": _env_bool("MAIL_USE_TLS", mail_port == 587),
+    "MAIL_USE_SSL": _env_bool("MAIL_USE_SSL", mail_port == 465),
+    "MAIL_FROM": _clean_env(os.environ.get("MAIL_FROM", "")),
+    "MAIL_USERNAME": _clean_env(os.environ.get("MAIL_USERNAME", "")),
+    "MAIL_PASSWORD": _clean_env(os.environ.get("MAIL_PASSWORD", "")),
     "MAIL_DEBUG": False,
     "MAIL_SUPPRESS_SEND": False,
+    "MAIL_PROVIDER": _clean_env(os.environ.get("MAIL_PROVIDER", "smtp"), "smtp").lower(),
+    "GMAIL_SENDER_EMAIL": _clean_env(os.environ.get("GMAIL_SENDER_EMAIL", os.environ.get("MAIL_USERNAME", ""))),
+    "GMAIL_REFRESH_TOKEN": _clean_env(os.environ.get("GMAIL_REFRESH_TOKEN", os.environ.get("MAIL_TOKEN", ""))),
+    "GMAIL_TOKEN_URI": _clean_env(os.environ.get("GMAIL_TOKEN_URI", "https://oauth2.googleapis.com/token")),
 }
 app.config.update(mail_settings)
 
+app.config["GOOGLE_CLIENT_ID"] = os.environ.get("GOOGLE_CLIENT_ID", "")
+app.config["GOOGLE_SECRET"] = os.environ.get("GOOGLE_SECRET", "")
+app.config["GOOGLE_CALLBACK_URL"] = os.environ.get(
+    "GOOGLE_CALLBACK_URL", "https://go.edu-ai.eu/auth/google/callback"
+)
+
 mail = Mail(app)
+
+oauth = OAuth(app)
+if app.config["GOOGLE_CLIENT_ID"] and app.config["GOOGLE_SECRET"]:
+    oauth.register(
+        name="google",
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_id=app.config["GOOGLE_CLIENT_ID"],
+        client_secret=app.config["GOOGLE_SECRET"],
+        client_kwargs={"scope": "openid email profile"},
+    )
 
 
 @app.context_processor

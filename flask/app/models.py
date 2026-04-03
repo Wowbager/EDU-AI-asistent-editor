@@ -5,6 +5,7 @@ from time import time
 import jwt
 from app import app
 from sqlalchemy.dialects.mysql import LONGTEXT, VARCHAR
+from datetime import datetime
 
 
 @login_manager.user_loader
@@ -29,6 +30,9 @@ class User(db.Model, UserMixin):
     name = db.Column(db.String(255), default="")
     email = db.Column(db.String(255), unique=True, index=True)
     password_hash = db.Column(db.String(128))
+    auth_provider = db.Column(db.String(32), nullable=False, default="local")
+    google_sub = db.Column(db.String(255), unique=True, index=True, nullable=True)
+    email_verified_at = db.Column(db.DateTime, nullable=True)
     courses = db.relationship(
         "Course", backref="user", lazy=True, cascade="all, delete-orphan"
     )
@@ -52,6 +56,9 @@ class User(db.Model, UserMixin):
 
     def set_password(self, password2hash):
         self.password_hash = generate_password_hash(password2hash)
+
+    def mark_email_verified(self):
+        self.email_verified_at = datetime.utcnow()
 
     def get_reset_password_token(self, expires_in=600):
         return jwt.encode(

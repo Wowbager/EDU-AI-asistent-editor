@@ -45,12 +45,29 @@ APP_PORT=8088
 MAIL_SERVER="smtp-relay.gmail.com"
 # port mailového serveru
 MAIL_PORT=465
+# zapnout TLS (obvykle pro port 587)
+MAIL_USE_TLS=0
+# zapnout SSL (obvykle pro port 465)
+MAIL_USE_SSL=1
 # odesílatel emailů
 MAIL_FROM=EDU-AI
 # email pro odesílání emailů
 MAIL_USERNAME=username@gmail.com
 # heslo k emailu ^
 MAIL_PASSWORD=randompassword
+# poskytovatel odesílání emailů: smtp nebo gmail_api
+MAIL_PROVIDER=smtp
+# adresa odesílatele pro Gmail API
+GMAIL_SENDER_EMAIL=username@gmail.com
+# refresh token pro Gmail API (pokud je MAIL_PROVIDER=gmail_api)
+GMAIL_REFRESH_TOKEN=""
+# token endpoint pro Gmail API
+GMAIL_TOKEN_URI="https://oauth2.googleapis.com/token"
+# Google OAuth přihlášení
+GOOGLE_CLIENT_ID=""
+GOOGLE_SECRET=""
+# callback URL registrovaná v Google Console
+GOOGLE_CALLBACK_URL="https://go.edu-ai.eu/auth/google/callback"
 # heslo k databázi
 MYSQL_ROOT_PASSWORD=randompassword
 # secret key
@@ -62,6 +79,33 @@ MFF_WIKI_URL="https://wiki.server.com"
 # URL knihovny pro ucely stahovani sdilenych kurzu
 LIBRARY_URL="https://library.server.com"
 ```
+
+### Gmail API: co potrebujete od admina
+
+Pokud nemate pristup do firemniho Google Workspace/Cloud, potrebujete od admina jen tyto hodnoty:
+
+1. GOOGLE_CLIENT_ID
+2. GOOGLE_SECRET
+3. GMAIL_SENDER_EMAIL
+4. GMAIL_REFRESH_TOKEN (scope: https://www.googleapis.com/auth/gmail.send)
+
+Pak v `.env` nastavte:
+
+```
+MAIL_PROVIDER=gmail_api
+GOOGLE_CLIENT_ID=...
+GOOGLE_SECRET=...
+GMAIL_SENDER_EMAIL=...
+GMAIL_REFRESH_TOKEN=...
+```
+
+Pro jednorazove vygenerovani refresh tokenu (na stroji s prohlizecem) je pripraven skript:
+
+```
+python3 flask/scripts/generate_gmail_refresh_token.py --credentials credentials.json
+```
+
+Skript vytiskne hodnotu `GMAIL_REFRESH_TOKEN=...`, kterou vlozite do `.env`.
 
 Porty, které je potřeba otevřít ven (při provozu dle přiložené vzorové konfigurace):
 

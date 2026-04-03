@@ -5,13 +5,13 @@ from flask import (
     flash,
     redirect,
     request,
+    session,
     Blueprint,
     jsonify,
-    redirect,
 )
 from flask_login import login_user, current_user
 from flask.helpers import safe_join
-from app import db, basedir, app
+from app import db, basedir, app, oauth
 from cryptography.fernet import Fernet
 from hashids import Hashids
 from app.mail import send_email
@@ -24,6 +24,9 @@ from app.public.forms import (
 )
 import requests
 import json
+from authlib.integrations.base_client.errors import OAuthError
+from datetime import datetime
+from urllib.parse import urlparse
 
 public = Blueprint("public", __name__)
 
@@ -331,18 +334,9 @@ def login():
 
         if user.check_password(form.password.data):
             login_user(user)
-            next_page = request.args.get("next")
+            next_page = _sanitize_next_url(request.args.get("next"))
             if next_page:
-                # Check if it's a full URL (with domain)
-                if '://' in next_page:
-                    # Extract just the path from the URL
-                    from urllib.parse import urlparse
-                    next_path = urlparse(next_page).path
-                    if next_path and next_path.startswith('/'):
-                        return redirect(next_path)
-                # Or if it's just a path
-                elif next_page.startswith('/'):
-                    return redirect(next_page)
+                return redirect(next_page)
             
             # If no valid next parameter, go to courses
             return redirect(url_for("roleplay.roleplay_home"))
@@ -350,3 +344,101 @@ def login():
             flash("Špatné heslo!", "danger")
 
     return render_template("public/login.html", form=form)
+
+
+def _sanitize_next_url(next_page):
+    if not next_page:
+        return None
+    if "://" in next_page:
+        parsed = urlparse(next_page)
+        if parsed.path and parsed.path.startswith("/"):
+            return parsed.path
+        return None
+    if next_page.startswith("/"):
+        return next_page
+    return None
+
+
+@public.route("/auth/google")
+def auth_google():
+    if current_user.is_authenticated:
+        return redirect(url_for("roleplay.roleplay_home"))
+
+    google_client = oauth.create_client("google")
+    if not google_client:
+        flash("Google přihlášení není nakonfigurováno.", "danger")
+        return redirect(url_for("public.login"))
+
+    session.pop("post_auth_next", None)
+    next_page = _sanitize_next_url(request.args.get("next"))
+    if next_page:
+        session["post_auth_next"] = next_page
+    redirect_uri = app.config.get("GOOGLE_CALLBACK_URL") or url_for("public.auth_google_callback", _external=True)
+    return google_client.authorize_redirect(redirect_uri)
+
+
+@public.route("/auth/google/callback")
+def auth_google_callback():
+    google_client = oauth.create_client("google")
+    if not google_client:
+        flash("Google přihlášení není nakonfigurováno.", "danger")
+        return redirect(url_for("public.login"))
+
+    try:
+        token = google_client.authorize_access_token()
+    except OAuthError:
+        flash("Google přihlášení se nepodařilo. Zkuste to prosím znovu.", "danger")
+        return redirect(url_for("public.login"))
+
+    user_info = token.get("userinfo")
+    if not user_info:
+        try:
+            user_info = google_client.parse_id_token(token)
+        except Exception:
+            user_info = None
+
+    if not user_info:
+        flash("Nepodařilo se načíst Google profil.", "danger")
+        return redirect(url_for("public.login"))
+
+    email = (user_info.get("email") or "").lower().strip()
+    google_sub = user_info.get("sub")
+    email_verified = bool(user_info.get("email_verified"))
+
+    if not email or not google_sub:
+        flash("Google přihlášení nevrátilo kompletní údaje.", "danger")
+        return redirect(url_for("public.login"))
+
+    existing_by_email = User.query.filter_by(email=email).first()
+    if existing_by_email and not email_verified and existing_by_email.google_sub != google_sub:
+        flash("Google účet musí mít ověřený e-mail pro propojení s existujícím účtem.", "warning")
+        return redirect(url_for("public.login"))
+
+    user = User.query.filter_by(google_sub=google_sub).first()
+    if not user and email_verified:
+        user = existing_by_email
+
+    if not user:
+        user = User(
+            email=email,
+            name=(user_info.get("name") or email.split("@")[0])[:255],
+            auth_provider="google",
+            google_sub=google_sub,
+        )
+        if email_verified:
+            user.email_verified_at = datetime.utcnow()
+        db.session.add(user)
+    else:
+        user.auth_provider = user.auth_provider or "google"
+        if not user.google_sub:
+            user.google_sub = google_sub
+        if email_verified and not user.email_verified_at:
+            user.email_verified_at = datetime.utcnow()
+
+    db.session.commit()
+    login_user(user)
+
+    next_page = _sanitize_next_url(session.pop("post_auth_next", None))
+    if next_page:
+        return redirect(next_page)
+    return redirect(url_for("roleplay.roleplay_home"))

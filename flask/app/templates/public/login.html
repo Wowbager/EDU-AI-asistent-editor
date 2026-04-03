@@ -44,45 +44,12 @@
                 <a href="{{url_for('public.reset_password')}}">Resetovat heslo</a>
             </div>
             {{form.submit(class="btn btn-primary btn-block")}}
-            <hr style="display:none">
-            <p class="text-muted" style="display:none">Login with your social media account.</p>
-            <ul class="list-inline" style="display:none">
-                <li class="list-inline-item">
-                    <a href="#" class="btn btn-floating btn-facebook">
-                        <i class="fa fa-facebook"></i>
-                    </a>
-                </li>
-                <li class="list-inline-item">
-                    <a href="#" class="btn btn-floating btn-twitter">
-                        <i class="fa fa-twitter"></i>
-                    </a>
-                </li>
-                <li class="list-inline-item">
-                    <a href="#" class="btn btn-floating btn-dribbble">
-                        <i class="fa fa-dribbble"></i>
-                    </a>
-                </li>
-                <li class="list-inline-item">
-                    <a href="#" class="btn btn-floating btn-linkedin">
-                        <i class="fa fa-linkedin"></i>
-                    </a>
-                </li>
-                <li class="list-inline-item">
-                    <a href="#" class="btn btn-floating btn-google">
-                        <i class="fa fa-google"></i>
-                    </a>
-                </li>
-                <li class="list-inline-item">
-                    <a href="#" class="btn btn-floating btn-behance">
-                        <i class="fa fa-behance"></i>
-                    </a>
-                </li>
-                <li class="list-inline-item">
-                    <a href="#" class="btn btn-floating btn-instagram">
-                        <i class="fa fa-instagram"></i>
-                    </a>
-                </li>
-            </ul>
+            <div class="text-center my-3">
+                <small class="text-muted">nebo</small>
+            </div>
+            <a href="{{ url_for('public.auth_google', next=request.args.get('next')) }}" class="btn btn-outline-dark btn-block">
+                <i class="fa fa-google mr-2"></i>Přihlásit se přes Google
+            </a>
             <hr>
             <p class="text-muted">Ještě nemáte účet?</p>
             <a href="{{url_for('public.register')}}" class="btn btn-outline-light btn-sm">Registrujte se!</a>
