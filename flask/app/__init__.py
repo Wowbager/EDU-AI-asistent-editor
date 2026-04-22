@@ -218,11 +218,13 @@ def unauthorized_callback():
 from app.public.views import public
 from app.admin.views import admin
 from app.roleplay.views import roleplay
+from app.showcase.views import showcase
 
 
 app.register_blueprint(public)
 app.register_blueprint(admin, url_prefix="/admin")
 app.register_blueprint(roleplay, url_prefix="/soutez")
+app.register_blueprint(showcase, url_prefix="/showcase")
 """
 try:
     from app.super_admin.views import super_admin

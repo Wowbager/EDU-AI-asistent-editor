@@ -4,6 +4,7 @@ aiosignal==1.2.0
 alembic==1.7.6
 asn1crypto==1.4.0
 async-timeout==4.0.2
+authlib==1.3.1
 attrs==21.4.0
 blinker==1.4
 certifi==2021.10.8

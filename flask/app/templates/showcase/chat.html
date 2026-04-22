@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}EDU AI Showcase - {{ persona.name }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/unified-chat.css') }}">
+
+<body>
+    <div class="layout">
+        <div class="content">
+            {# ── Unified Chat Widget ─────────────────────────── #}
+            {% set uc_id = persona.name %}
+            {% set uc_placeholder = "Vyberte konverzaci z bočního menu" %}
+            {% include "roleplay/_chat_widget.html" %}
+        </div>
+    </div>
+</body>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+<script type="text/javascript" src="{{ url_for('static', filename='js/purify.min.js') }}"></script>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/unified-chat.js') }}"></script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", onReady);
+
+    function onReady() {
+        const MAX_AI_RESPONSES = {{ max_ai_responses }};
+
+        const chat = new UnifiedChat({
+            container: '#conversations-chat',
+            readOnly: false,
+            maxMessageLength: 500,
+
+            // Flag button callback → open the flag modal
+            onFlag: function (sessionId, content, messageIndex) {
+                // TODO: implement
+                console.log("Flag")
+            },
+
+            // Unflag / edit button callback → open modal prefilled
+            onUnflag: function (sessionId, content, flagInfo, messageIndex) {
+                // TODO: implement
+                console.log("Unflag")
+            },
+            onDisconnected: function (event) {
+                console.warn('Chat disconnected:', event);
+                if (!currentSessionId) return;
+                chat.addSystemMessage('⚠️ Byli jste odpojeni od chatu.');
+
+                if (event === "limit_reached" || limitReached) {
+                    limitReached = true;
+                    const currentSessionData = sessionsData.find(s => s.session.id === currentSessionId);
+                    const canReuseInstructions = !!(currentSessionData && (currentSessionData.is_posted_by_user || currentSessionData.is_public));
+
+                    const continueFooter = document.createElement('div');
+                    continueFooter.className = 'chat-footer-continue';
+                    if (canReuseInstructions) {
+                        continueFooter.innerHTML = `
+                            <div class="text-center">
+                                <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
+                                    <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
+                                </button>
+                                <p class="text-muted small mt-2 mb-2">Tato konverzace dosáhla maximálního počtu deseti odpovědí AI.</p>
+                                <button class="btn btn-outline-light btn-m" id="reuse-in-index-btn" style="display: inline-flex; align-items: center;">
+                                    <i class="fas fa-plus me-2"></i> Nový chat se stejnými instrukcemi
+                                </button>
+                            </div>
+                        `;
+                    } else {
+                        continueFooter.innerHTML = `
+                            <div class="text-center">
+                                <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
+                                    <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
+                                </button>
+                                <p class="text-muted small mt-2 mb-0">Tato konverzace dosáhla maximálního počtu deseti odpovědí AI.</p>
+                            </div>
+                        `;
+                    }
+                    continueFooter.style.display = 'flex';
+                    continueFooter.style.justifyContent = 'center';
+                    continueFooter.style.padding = '20px';
+
+                    if (chat.chatFooter) {
+                        chat.chatFooter.style.display = 'none';
+                    }
+
+                    document.querySelector(".chat").appendChild(continueFooter);
+                    return;
+                }
+
+                const continueFooter = document.createElement('div');
+                continueFooter.className = 'chat-footer-continue';
+                continueFooter.innerHTML = `
+                    <button class="btn btn-outline-light btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
+                    title="Pokračovat v konverzaci">
+                    <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
+                    </button>
+                `;
+                continueFooter.style.display = 'flex';
+                continueFooter.style.justifyContent = 'center';
+                continueFooter.style.padding = '20px';
+
+                if (chat.chatFooter) {
+                    chat.chatFooter.style.display = 'none';
+                }
+
+                document.querySelector(".chat").appendChild(continueFooter);
+            }
+        });
+
+        // FastAPI URL for session resume
+        const FASTAPI_URL = window.FASTAPI_SOCKETIO_URL ||
+            ((window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+                ? "http://localhost:6767" : "https://api.edu-ai.eu");
+    }
+</script>
+{% endblock %}
