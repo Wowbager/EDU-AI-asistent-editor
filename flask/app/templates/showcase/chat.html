@@ -9,7 +9,7 @@
     <div class="layout">
         <div class="content">
             {# ── Unified Chat Widget ─────────────────────────── #}
-            {% set uc_id = persona.name %}
+            {% set uc_id = "conversations-chat" %}
             {% set uc_placeholder = "Vyberte konverzaci z bočního menu" %}
             {% include "roleplay/_chat_widget.html" %}
         </div>
@@ -29,6 +29,9 @@
 
     function onReady() {
         const MAX_AI_RESPONSES = {{ max_ai_responses }};
+
+        let currentSessionId = null;
+        let limitReached = false;
 
         const chat = new UnifiedChat({
             container: '#conversations-chat',
@@ -53,33 +56,22 @@
 
                 if (event === "limit_reached" || limitReached) {
                     limitReached = true;
-                    const currentSessionData = sessionsData.find(s => s.session.id === currentSessionId);
-                    const canReuseInstructions = !!(currentSessionData && (currentSessionData.is_posted_by_user || currentSessionData.is_public));
 
                     const continueFooter = document.createElement('div');
                     continueFooter.className = 'chat-footer-continue';
-                    if (canReuseInstructions) {
-                        continueFooter.innerHTML = `
-                            <div class="text-center">
-                                <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
-                                    <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
-                                </button>
-                                <p class="text-muted small mt-2 mb-2">Tato konverzace dosáhla maximálního počtu deseti odpovědí AI.</p>
-                                <button class="btn btn-outline-light btn-m" id="reuse-in-index-btn" style="display: inline-flex; align-items: center;">
-                                    <i class="fas fa-plus me-2"></i> Nový chat se stejnými instrukcemi
-                                </button>
-                            </div>
-                        `;
-                    } else {
-                        continueFooter.innerHTML = `
-                            <div class="text-center">
-                                <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
-                                    <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
-                                </button>
-                                <p class="text-muted small mt-2 mb-0">Tato konverzace dosáhla maximálního počtu deseti odpovědí AI.</p>
-                            </div>
-                        `;
-                    }
+                    
+                    continueFooter.innerHTML = `
+                        <div class="text-center">
+                            <button class="btn btn-secondary btn-m" disabled style="display: inline-flex; align-items: center;">
+                                <i class="fas fa-lock me-2"></i> Limit odpovědí dosažen
+                            </button>
+                            <p class="text-muted small mt-2 mb-2">Tato konverzace dosáhla maximálního počtu deseti odpovědí AI.</p>
+                            <button class="btn btn-outline-light btn-m" id="reuse-in-index-btn" style="display: inline-flex; align-items: center;">
+                                <i class="fas fa-plus me-2"></i> Nový chat se stejnými instrukcemi
+                            </button>
+                        </div>
+                    `;
+                    
                     continueFooter.style.display = 'flex';
                     continueFooter.style.justifyContent = 'center';
                     continueFooter.style.padding = '20px';
@@ -89,6 +81,10 @@
                     }
 
                     document.querySelector(".chat").appendChild(continueFooter);
+
+                    document.getElementById("reuse-in-index-btn").addEventListener("click", function() {
+                        window.location.reload();
+                    });
                     return;
                 }
 
@@ -116,6 +112,68 @@
         const FASTAPI_URL = window.FASTAPI_SOCKETIO_URL ||
             ((window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
                 ? "http://localhost:6767" : "https://api.edu-ai.eu");
+
+        startChat();
+        
+        async function startChat() {
+            try {
+                chat.setHeader(`
+                    <div class="chat-header-user">
+                        <a class="btn btn-outline-light" href="./" id="back2conversations">
+                            <i class="fas fa-arrow-left"></i>
+                        </a>
+                        <figure class="avatar">
+                            <span class="avatar-title rounded-circle" style="background-color: #0a80ff">
+                                <i class="fas fa-user"></i>
+                            </span>
+                        </figure>
+                        <div>
+                            <h5>{{ persona.name }}</h5>
+                            <p class="text-muted small mb-0">{{ persona.description }}</p>
+                        </div>
+                    </div>
+                `);
+
+                chat.clear();
+                chat.show();
+                chat.addSystemMessage("Připravuji chat...", true);
+
+                const response = await fetch("{{ url_for('showcase.generate_session_id') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        persona: "{{ persona.id }}",
+                    }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Server error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                currentSessionId = data.session_id;
+
+                // Step 2: Connect via WebSocket
+                chat.addSystemMessage("Připojuji k chatovacímu serveru...", true);
+                await chat.connect(currentSessionId);
+                chat.clearProcessingMessages();
+
+                // Step 3: Send first message
+                const firstMsg = instructions ||
+                    "Představ se mi prosím, stručně vysvětli svou specializaci a řekni, jakým stylem budeš komunikovat.";
+                chat._socketSend(firstMsg);
+
+                chat.setInputEnabled(true);
+                if (chat.msgInput) chat.msgInput.focus();
+            } catch (error) {
+                chat.clearProcessingMessages();
+                chat.addSystemMessage(`Chyba při zahájení chatu: ${error.message}`);
+                console.error("startCustomChat error:", error);
+                chat.setInputEnabled(true);
+            }
+        }
     }
+
 </script>
 {% endblock %}

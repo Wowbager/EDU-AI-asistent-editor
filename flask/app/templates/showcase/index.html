@@ -11,11 +11,11 @@
         <p>Vítejte v ukázce EDU AI! Vyzkoušejte si chat s různými postavami a zkuste odhalit, s jakou osobností si povídáte.</p>
 
         <div class="personas">
-        {% for persona in personas %}
+        {% for id, persona in personas.items() %}
             <div class="persona-card">
                 <h2>{{ persona.name }}</h2>
                 <p>{{ persona.description }}</p>
-                <a href="{{ url_for('showcase.chat', persona_id=persona.id) }}" class="btn">Chatovat</a>
+                <a href="{{ url_for('showcase.chat', persona_id=id) }}" class="btn">Chatovat</a>
             </div>
         {% endfor %}
         </div>
