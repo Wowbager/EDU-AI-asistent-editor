@@ -38,6 +38,7 @@ class UnifiedChat {
      * @param {number} [options.maxMessageLength=500] - Maximum characters per message
      * @param {string} [options.socketUrl] - Socket.IO server URL
      * @param {boolean} [options.readOnly=false] - If true, hides input area
+     * @param {boolean} [options.hideFlagButton=false] - Whether to show flag buttons for assistant messages
      * @param {Function} [options.onFlag] - Called when flag button clicked: (sessionId, content, messageIndex)
      * @param {Function} [options.onUnflag] - Called when unflag button clicked: (sessionId, content, flagInfo)
      * @param {Function} [options.onMessageSent] - Called after a message is sent: (message)
@@ -52,6 +53,7 @@ class UnifiedChat {
         this.containerSelector = options.container || '#unified-chat';
         this.maxMessageLength = options.maxMessageLength || 500;
         this.readOnly = options.readOnly || false;
+        this.showFlagButton = options.hideFlagButton || false;
 
         // Socket.IO URL — resolve once
         const defaultUrl = (window.location.hostname === 'localhost' ||
@@ -298,7 +300,7 @@ class UnifiedChat {
             flagInfo = null,
             sessionId = this.sessionId,
             isPublic = false,
-            showFlagButton = true,
+            showFlagButton = !this.hideFlagButton,
             messageIndex: providedMessageIndex = null,
         } = options;
 

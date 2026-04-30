@@ -21,6 +21,10 @@
 </body>
 
 <style>
+    .layout {
+        height: calc(100vh - 5rem);
+    }
+
 
     .banner {
         height: 5rem;
@@ -53,6 +57,7 @@
             container: '#conversations-chat',
             readOnly: false,
             maxMessageLength: 500,
+            hideFlagButton: true,
 
             // Flag button callback → open the flag modal
             onFlag: function (sessionId, content, messageIndex) {
@@ -83,7 +88,7 @@
                             </button>
                             <p class="text-muted small mt-2 mb-2">Tato konverzace dosáhla maximálního počtu deseti odpovědí AI.</p>
                             <button class="btn btn-outline-light btn-m" id="reuse-in-index-btn" style="display: inline-flex; align-items: center;">
-                                <i class="fas fa-plus me-2"></i> Nový chat se stejnými instrukcemi
+                                <i class="fas fa-plus me-2"></i> Opakovat chat
                             </button>
                         </div>
                     `;
