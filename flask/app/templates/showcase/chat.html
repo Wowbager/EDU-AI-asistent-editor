@@ -6,15 +6,31 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/unified-chat.css') }}">
 
 <body>
+    <div class="banner">
+        <strong>Dokážete uhodnout tuto postavu? Pokud ano, zastavte se u organizátorů na stánku Edu AI!</strong>
+    </div>
     <div class="layout">
         <div class="content">
+
             {# ── Unified Chat Widget ─────────────────────────── #}
             {% set uc_id = "conversations-chat" %}
-            {% set uc_placeholder = "Vyberte konverzaci z bočního menu" %}
+            {% set uc_placeholder = "Načítání chatu..." %}
             {% include "roleplay/_chat_widget.html" %}
         </div>
     </div>
 </body>
+
+<style>
+
+    .banner {
+        height: 5rem;
+        background-color: #0a80ff;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+</style>
 {% endblock %}
 
 {% block scripts %}
@@ -160,8 +176,7 @@
                 chat.clearProcessingMessages();
 
                 // Step 3: Send first message
-                const firstMsg = instructions ||
-                    "Představ se mi prosím, stručně vysvětli svou specializaci a řekni, jakým stylem budeš komunikovat.";
+                const firstMsg = "Představ se mi prosím, stručně vysvětli svou specializaci a řekni, jakým stylem budeš komunikovat.";
                 chat._socketSend(firstMsg);
 
                 chat.setInputEnabled(true);
