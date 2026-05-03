@@ -238,7 +238,7 @@ async def send_message(sid, user_message):
             to=sid,
         )
 
-        if user_id is not "showcase_user":
+        if user_id != "showcase_user":
             await save_chat_to_database(session_id, user_id, role_id, messages)
 
         if assistant_message_count >= MAX_ASSISTANT_RESPONSES:
