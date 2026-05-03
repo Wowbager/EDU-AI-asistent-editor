@@ -300,7 +300,7 @@ class UnifiedChat {
             flagInfo = null,
             sessionId = this.sessionId,
             isPublic = false,
-            showFlagButton = !this.hideFlagButton,
+            showFlagButton = true,
             messageIndex: providedMessageIndex = null,
         } = options;
 
@@ -367,7 +367,7 @@ class UnifiedChat {
         }
 
         // Flag / Unflag buttons (assistant only, non-public)
-        if (isAssistant && showFlagButton) {
+        if (isAssistant && showFlagButton && !this.hideFlagButton) {
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'message-actions mt-2';
 
