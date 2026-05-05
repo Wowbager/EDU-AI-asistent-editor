@@ -14,7 +14,7 @@
 
             {# ── Unified Chat Widget ─────────────────────────── #}
             {% set uc_id = "conversations-chat" %}
-            {% set uc_placeholder = "Načítání chatu..." %}
+            {% set uc_placeholder = "Pro zahájení chatu napište první zprávu" %}
             {% include "roleplay/_chat_widget.html" %}
         </div>
     </div>
@@ -180,9 +180,8 @@
                 await chat.connect(currentSessionId);
                 chat.clearProcessingMessages();
 
-                // Step 3: Send first message
-                const firstMsg = "Představ se mi prosím, stručně vysvětli svou specializaci a řekni, jakým stylem budeš komunikovat.";
-                chat._socketSend(firstMsg);
+                // Step 3: Wait for user to start the chat
+                chat.addSystemMessage("Pro zahájení chatu napište první zprávu.");
 
                 chat.setInputEnabled(true);
                 if (chat.msgInput) chat.msgInput.focus();
