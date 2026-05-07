@@ -6,14 +6,14 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/unified-chat.css') }}">
 
 <body>
-    <div class="banner">
-        <div class="banner-content">
-            <strong>Dokážete uhodnout tuto postavu? Pokud ano, zastavte se u organizátorů na stánku Nachytej AI!</strong>
-            <p class="persona-hint">{{ persona.description }}</p>
-        </div>
-    </div>
     <div class="layout">
         <div class="content">
+            <div class="banner">
+                <div class="banner-content">
+                    <strong>Dokážete uhodnout tuto postavu? Pokud ano, zastavte se u organizátorů na stánku Nachytej AI!</strong>
+                    <p class="persona-hint">{{ persona.description }}</p>
+                </div>
+            </div>
 
             {# ── Unified Chat Widget ─────────────────────────── #}
             {% set uc_id = "conversations-chat" %}
@@ -24,8 +24,13 @@
 </body>
 
 <style>
-    .layout {
+    /* .layout {
         height: calc(100vh - 5rem);
+    } */
+
+    .layout .content {
+        display: flex;
+        flex-direction: column;
     }
 
 
@@ -135,8 +140,8 @@
                 continueFooter.className = 'chat-footer-continue';
                 continueFooter.innerHTML = `
                     <button class="btn btn-outline-light btn-m" id="continue-conversation-btn" style="display: inline-flex; align-items: center;"
-                    title="Pokračovat v konverzaci">
-                    <i class="fas fa-play me-2"></i> Pokračovat v konverzaci
+                    title="Opakovat chat">
+                    <i class="fas fa-play me-2"></i> Opakovat chat
                     </button>
                 `;
                 continueFooter.style.display = 'flex';
@@ -148,6 +153,10 @@
                 }
 
                 document.querySelector(".chat").appendChild(continueFooter);
+
+                document.getElementById("continue-conversation-btn").addEventListener("click", function() {
+                    window.location.reload();
+                });
             }
         });
 
