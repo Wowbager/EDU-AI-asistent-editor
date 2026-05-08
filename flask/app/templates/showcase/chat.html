@@ -18,23 +18,20 @@
             {# ── Unified Chat Widget ─────────────────────────── #}
             {% set uc_id = "conversations-chat" %}
             {% set uc_placeholder = "Pro zahájení chatu napište první zprávu" %}
+            {% set uc_send_icon_only = true %}
             {% include "roleplay/_chat_widget.html" %}
         </div>
     </div>
 </body>
 
 <style>
-    /* .layout {
-        height: calc(100vh - 5rem);
-    } */
-
     .layout .content {
         display: flex;
         flex-direction: column;
     }
 
     .layout .content .chat {
-        height: calc(100svh - 5rem);
+        height: calc(100dvh - 5rem);
     }
 
 

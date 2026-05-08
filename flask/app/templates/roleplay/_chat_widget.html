@@ -36,7 +36,11 @@
             ></textarea>
             <div class="form-buttons">
                 <button class="btn btn-primary uc-send-btn">
-                    <i class="fas fa-paper-plane me-2"></i> Odeslat
+                    {% if uc_send_icon_only %}
+                        <i class="fas fa-paper-plane"></i>
+                    {% else %}
+                        <i class="fas fa-paper-plane me-2"></i> Odeslat
+                    {% endif %}
                 </button>
                 <button class="btn btn-outline-secondary d-none d-md-inline-block uc-clear-btn">
                     <i class="fas fa-eraser me-2"></i> Vymazat
