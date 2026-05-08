@@ -22,6 +22,11 @@ def _validate_prefixed_model(model_name: str) -> None:
 
 _validate_prefixed_model(AIModelConfig.CHAT_MODEL)
 
+CHAT_FALLBACKS = [
+    "openrouter/gpt-5-mini:nitro",
+    "groq/meta-llama/llama-4-scout-17b-16e-instruct",
+]
+
 model = ChatOpenAI(
     model=AIModelConfig.CHAT_MODEL,
     temperature=AIModelConfig.CHAT_TEMPERATURE,
@@ -29,6 +34,7 @@ model = ChatOpenAI(
     timeout=AIModelConfig.REQUEST_TIMEOUT,
     openai_api_key=AIModelConfig.OPENAI_API_KEY,
     openai_api_base=AIModelConfig.BIFROST_API_BASE,
+    model_kwargs={"fallbacks": CHAT_FALLBACKS},
 )
 
 async def get_llm_response(message=None, chat=None):

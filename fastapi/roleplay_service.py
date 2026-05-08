@@ -16,6 +16,11 @@ from .models import ChatMessage, ChatSession
 
 logger = logging.getLogger(__name__)
 
+CHAT_FALLBACKS = [
+    "openrouter/gpt-5-mini:nitro",
+    "groq/meta-llama/llama-4-scout-17b-16e-instruct",
+]
+
 
 @dataclass
 class SessionBootstrap:
@@ -49,6 +54,7 @@ def create_chat_model() -> ChatOpenAI:
         timeout=AIModelConfig.REQUEST_TIMEOUT,
         openai_api_key=AIModelConfig.OPENAI_API_KEY,
         openai_api_base=AIModelConfig.BIFROST_API_BASE,
+        model_kwargs={"fallbacks": CHAT_FALLBACKS},
     )
 
 

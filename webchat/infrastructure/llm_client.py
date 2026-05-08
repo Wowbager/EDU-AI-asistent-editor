@@ -8,6 +8,11 @@ from ai_config import AIModelConfig
 
 logger = logging.getLogger(__name__)
 
+CHAT_FALLBACKS = [
+    "openrouter/gpt-5-mini:nitro",
+    "groq/meta-llama/llama-4-scout-17b-16e-instruct",
+]
+
 
 class LLMClient:
     """Centralized LLM client for AI service integration."""
@@ -28,6 +33,7 @@ class LLMClient:
             timeout=timeout,
             openai_api_key=AIModelConfig.OPENAI_API_KEY,
             openai_api_base=AIModelConfig.BIFROST_API_BASE,
+            model_kwargs={"fallbacks": CHAT_FALLBACKS},
         )
 
     @staticmethod

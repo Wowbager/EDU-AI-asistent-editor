@@ -22,6 +22,11 @@ from .ai_prompts import BIFROST_API_BASE, BIFROST_API_KEY
 openai.api_key = BIFROST_API_KEY
 openai.api_base = BIFROST_API_BASE
 
+ROLE_FALLBACKS = [
+    "groq/meta-llama/llama-4-maverick-17b-128e-instruct",
+    "openrouter/gpt-5-mini:nitro",
+]
+
 
 def _validate_prefixed_model(model: str) -> None:
     if not isinstance(model, str) or "/" not in model:
@@ -130,6 +135,7 @@ def generate_roles_from_subject(subject: str, model: str, request_timeout: int) 
             temperature=ROLE_GENERATION_TEMPERATURE,
             max_tokens=ROLE_GEN_MAX_TOKENS,
             response_format=role_schema,
+            fallbacks=ROLE_FALLBACKS,
         )
         return response.choices[0].message.content
     except openai.error.OpenAIError as e:
@@ -192,6 +198,7 @@ def generate_role_instructions_preview(
             temperature=ROLE_INSTRUCTION_PREVIEW_TEMPERATURE,
             max_tokens=ROLE_INSTRUCTION_PREVIEW_MAX_TOKENS,
             response_format=response_schema,
+            fallbacks=ROLE_FALLBACKS,
         )
 
         raw_content = response.choices[0].message.content

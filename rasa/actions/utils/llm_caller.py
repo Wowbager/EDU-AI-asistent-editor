@@ -5,6 +5,16 @@ from .rate_limiter import GlobalRateLimiter
 
 rate_limiter = GlobalRateLimiter()
 
+CHAT_FALLBACKS = [
+    "openrouter/gpt-5-mini:nitro",
+    "groq/meta-llama/llama-4-scout-17b-16e-instruct",
+]
+
+NON_CHAT_FALLBACKS = [
+    "groq/meta-llama/llama-4-maverick-17b-128e-instruct",
+    "openrouter/gpt-5-mini:nitro",
+]
+
 
 def _load_shared_ai_config():
     config_path = os.getenv("AI_CONFIG_PATH", "/opt/edu-ai/ai_config.json")
@@ -68,11 +78,13 @@ async def get_llm_response(message=None, chat=None):
  
     model = await rate_limiter.get_model() if chat is not None else _cfg_value("chat_model", "OPENAI_MODEL", "openai/gpt-5.1", str)
     _validate_prefixed_model(model)
+    fallbacks = CHAT_FALLBACKS if chat is not None else NON_CHAT_FALLBACKS
     chat_response = await openai.ChatCompletion.acreate(
         model=model,
         request_timeout=600,
         messages=messages,
         temperature=temperature,
         max_completion_tokens=max_tokens,
+        fallbacks=fallbacks,
     )
     return chat_response.choices[0].message.content
