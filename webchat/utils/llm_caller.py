@@ -34,7 +34,6 @@ model = ChatOpenAI(
     timeout=AIModelConfig.REQUEST_TIMEOUT,
     openai_api_key=AIModelConfig.OPENAI_API_KEY,
     openai_api_base=AIModelConfig.BIFROST_API_BASE,
-    model_kwargs={"fallbacks": CHAT_FALLBACKS},
 )
 
 async def get_llm_response(message=None, chat=None):
