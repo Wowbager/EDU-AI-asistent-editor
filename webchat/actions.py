@@ -301,6 +301,9 @@ class ActionQuiz(Action):
     async def run(self, dispatcher, tracker, domain):
         timer = time.time()
         latest_message = tracker.latest_message.get("text", "")
+        if latest_message:
+            if len(latest_message) > 270:
+                latest_message = latest_message[:200] + "..." + latest_message[-50:]
         sender_id = tracker.current_state()["sender_id"]
 
         slots = await get_slots(sender_id)
