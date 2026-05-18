@@ -26,7 +26,7 @@ fastapi_app = FastAPI(title="EDU-AI Chat API")
 
 fastapi_app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://go.edu-ai.eu", "http://localhost:8000"],
+    allow_origins=["https://go.edu-ai.eu", "http://localhost:8000", "https://edu-ai.eu"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,7 +34,7 @@ fastapi_app.add_middleware(
 
 sio = socketio.AsyncServer(
     async_mode="asgi",
-    cors_allowed_origins=["https://go.edu-ai.eu", "http://localhost:8000"],
+    cors_allowed_origins=["https://go.edu-ai.eu", "http://localhost:8000", "https://edu-ai.eu"],
 )
 
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
