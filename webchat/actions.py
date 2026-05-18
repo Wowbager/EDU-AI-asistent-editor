@@ -224,6 +224,14 @@ def trim_to_50(text2send):
     except (TypeError, AttributeError):
         return ""
     
+def _trim_middle(text: str, max_len: int = 240) -> str:
+    if not text or len(text) <= max_len:
+        return text
+    head_len = max_len // 2
+    tail_len = max_len - head_len - 3
+    return text[:head_len] + "..." + text[-tail_len:]
+
+
 def get_utterances(events, sender_is_user=True, message_position=0, latest_question=None):
     def format_question_with_buttons(question):
         _options = [
@@ -255,7 +263,7 @@ def get_utterances(events, sender_is_user=True, message_position=0, latest_quest
 
                 found_right_message = True
                 messages_found += 1
-                message = e.get("text", "")
+                message = _trim_middle(str(e.get("text", "")))
                 if sender == "bot":
                     try:
                         if len(e.get("data", {}).get("buttons", [])) > 0:
@@ -286,11 +294,11 @@ def get_formated_chat_history(events, gpt_type=""):
                     if gpt_type == "1" and len(text) > 300:
                         text = text[:300]
                         
-                    chat_history.append({"role": "user", "content": text})
+                    chat_history.append({"role": "user", "content": _trim_middle(text)})
                     if "reset" in text.lower() or "restart" in text.lower():
                         chat_history = []
                 else:
-                    chat_history.append({"role": "assistant", "content": e.get("text", "")})
+                    chat_history.append({"role": "assistant", "content": _trim_middle(e.get("text", ""))})
     
     return chat_history
 
@@ -302,8 +310,7 @@ class ActionQuiz(Action):
         timer = time.time()
         latest_message = tracker.latest_message.get("text", "")
         if latest_message:
-            if len(latest_message) > 270:
-                latest_message = latest_message[:200] + "..." + latest_message[-50:]
+            latest_message = _trim_middle(latest_message)
         sender_id = tracker.current_state()["sender_id"]
 
         slots = await get_slots(sender_id)
