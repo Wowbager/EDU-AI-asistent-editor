@@ -363,7 +363,7 @@ class ActionQuiz(Action):
             return [FollowupAction("action_listen")]
 
         # asking mff
-        if "/w" in latest_message.lower() and len(latest_message) > 2 and command == "":
+        if latest_message.lower().startswith("/w") and len(latest_message) > 2 and command == "":
             message2send = latest_message.split("/w")[1]
             await set_slot(sender_id, "command", "1")
             try:
@@ -391,7 +391,7 @@ class ActionQuiz(Action):
                     text=f"Omlouvám se, část mozku mi právě nefunguje."
                 )
 
-        if "/e" in latest_message.lower() and len(latest_message) > 2 and command == "":
+        if latest_message.lower().startswith("/e") and len(latest_message) > 2 and command == "":
             message2send = latest_message.split("/e")[1].strip()
             prompt = "\n".join([
                 ""
