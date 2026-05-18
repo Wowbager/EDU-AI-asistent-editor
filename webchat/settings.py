@@ -25,7 +25,7 @@ class Settings:
         self.rate_limit_window_seconds = int(os.getenv("WEBCHAT_RATE_LIMIT_WINDOW", "60"))
         origins_str = os.getenv(
             "WEBCHAT_ALLOWED_ORIGINS",
-            "http://localhost:3000,http://localhost:4173,https://go.edu-ai.eu",
+            "http://localhost:3000,http://localhost:4173,https://go.edu-ai.eu,https://edu-ai.eu",
         )
         self.allowed_origins: List[str] = [origin.strip() for origin in origins_str.split(",")]
         self.default_input_channel = os.getenv("WEBCHAT_INPUT_CHANNEL", "deepchat-web")
